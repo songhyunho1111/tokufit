@@ -304,8 +304,8 @@ struct FoodCaloriesView: View {
 
     private var confirmationContent: some View {
         VStack(spacing: 24) {
-            if let food = model.displayedFood {
-                VStack(spacing: 12) {
+            VStack(spacing: 12) {
+                if let food = model.displayedFood {
                     HStack(spacing: 6) {
                         Circle().fill(Color.repickGold).frame(width: 7, height: 7)
                         Text(model.isDraftEdited ? "직접 확인 · \(food.name)" : "AI 인식 · \(food.name)")
@@ -314,11 +314,18 @@ struct FoodCaloriesView: View {
                     .padding(.horizontal, 12).padding(.vertical, 8)
                     .background(Color.repickSurface, in: Capsule())
                     .accessibilityIdentifier("food.recognition")
-                    Image("FoodBowl").resizable().scaledToFit().frame(width: 208, height: 160)
-                        .accessibilityHidden(true)
                 }
-                .padding(.vertical, 12)
+                if let data = model.photo?.jpegData, let image = UIImage(data: data) {
+                    Color.repickSurface.overlay {
+                        Image(uiImage: image).resizable().scaledToFit()
+                            .accessibilityLabel("선택한 음식 사진")
+                            .accessibilityIdentifier("food.confirmationPhoto")
+                    }
+                    .frame(height: 220)
+                    .clipShape(RoundedRectangle(cornerRadius: 20))
+                }
             }
+            .padding(.vertical, 12)
             VStack(alignment: .leading, spacing: 20) {
                 HStack(alignment: .center, spacing: 16) {
                     Image("FoodMascot").resizable().scaledToFit().frame(width: 55, height: 58)

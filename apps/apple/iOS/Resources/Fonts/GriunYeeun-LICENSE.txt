@@ -1,0 +1,8 @@
+Griun Yeeun / 그리운 예은체
+Publisher: GRIUN (TypeE)
+Official source: https://www.griun.co.kr/fonts/yeeun
+Usage notice retrieved 2026-10-25:
+모든 사용 범위에서 자유롭게 사용이 가능합니다.
+다만, 폰트파일 개작⋅수정⋅판매는 금지됩니다.
+
+Bundled from the original Griun_Yeeun-Rg.ttf without modification.
