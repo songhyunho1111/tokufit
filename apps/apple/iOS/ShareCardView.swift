@@ -66,39 +66,62 @@ struct ShareCardView: View {
     }
 
     private func shareActions(_ export: ShareCardExport) -> some View {
-        VStack(spacing: 4) {
+        VStack(spacing: 10) {
             ShareLink(item: export.url, preview: SharePreview("RE:PICK 기록", image: Image(uiImage: export.image))) {
                 Label("이미지 공유", systemImage: "square.and.arrow.up")
             }
             .buttonStyle(PrimaryButtonStyle())
             .accessibilityIdentifier("share.export")
-            if instagram.availability != .setupRequired {
-            Button {
-                Task { await shareToInstagram(export) }
-            } label: {
-                Label(isOpeningInstagram ? "Instagram 여는 중" : "Instagram 스토리", systemImage: "camera")
-                    .font(AppFont.font(.subheadline, weight: .medium))
-                    .frame(maxWidth: .infinity, minHeight: 44)
+            Group {
+                if instagram.availability == .ready {
+                    Button {
+                        Task { await shareToInstagram(export) }
+                    } label: { instagramShareLabel }
+                } else {
+                    ShareLink(item: export.url, preview: SharePreview("RE:PICK 기록", image: Image(uiImage: export.image))) {
+                        instagramShareLabel
+                    }
+                }
             }
             .buttonStyle(.plain)
-            .foregroundStyle(instagram.availability == .ready ? Color.repickGreen : Color.repickSecondaryText)
-            .disabled(instagram.availability != .ready || isOpeningInstagram)
+            .disabled(isOpeningInstagram)
             .accessibilityIdentifier("share.instagram")
-            }
-            if instagram.availability == .setupRequired {
-                Text("스토리 공유 준비 중")
-                    .font(AppFont.font(.caption)).foregroundStyle(Color.repickSecondaryText)
-                    .accessibilityIdentifier("share.instagramUnavailable")
-            } else if instagram.availability == .appUnavailable {
-                Text("Instagram 설치 후 사용할 수 있어요.")
-                    .font(AppFont.font(.caption)).foregroundStyle(Color.repickSecondaryText)
-            }
         }
         .padding(.horizontal, Design.pagePadding)
         .padding(.vertical, 12)
         .frame(maxWidth: Design.contentWidth)
         .frame(maxWidth: .infinity)
         .background(Color.repickCream)
+    }
+
+    private var instagramShareLabel: some View {
+        HStack(spacing: 10) {
+            ZStack(alignment: .topTrailing) {
+                RoundedRectangle(cornerRadius: 7).stroke(lineWidth: 2)
+                Circle().stroke(lineWidth: 2)
+                    .frame(width: 11, height: 11)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                Circle().fill().frame(width: 3, height: 3)
+                    .offset(x: -4.5, y: 4.5)
+            }
+            .frame(width: 25, height: 25)
+            .accessibilityHidden(true)
+            Text(isOpeningInstagram ? "Instagram 여는 중…" : "Instagram으로 공유하기")
+                .font(AppFont.font(.body, weight: .semibold))
+                .multilineTextAlignment(.center)
+        }
+        .foregroundStyle(.white)
+        .padding(.horizontal, 16).padding(.vertical, 13)
+        .frame(maxWidth: .infinity, minHeight: 54)
+        .background(
+            LinearGradient(colors: [
+                Color(red: 0.93, green: 0.36, blue: 0.22),
+                Color(red: 0.82, green: 0.15, blue: 0.44),
+                Color(red: 0.61, green: 0.22, blue: 0.68),
+                Color(red: 0.32, green: 0.30, blue: 0.78)
+            ], startPoint: .bottomLeading, endPoint: .topTrailing),
+            in: RoundedRectangle(cornerRadius: Design.controlRadius)
+        )
     }
 
     @MainActor
@@ -129,7 +152,7 @@ struct ShareCardView: View {
         } catch is CancellationError {
             return
         } catch InstagramStoryShare.Failure.setupRequired {
-            instagramError = String(localized: "스토리 공유 준비 중입니다. 이미지 공유를 이용해 주세요.")
+            instagramError = String(localized: "Instagram으로 연결하지 못했어요. 이미지 공유를 이용해 주세요.")
         } catch InstagramStoryShare.Failure.appUnavailable {
             instagramError = String(localized: "Instagram을 설치한 뒤 다시 시도해 주세요.")
         } catch {

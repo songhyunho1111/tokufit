@@ -460,8 +460,9 @@ final class REPickUITests: XCTestCase {
         XCTAssertTrue(app.images["share.preview"].waitForExistence(timeout: 15))
         capture("Named character story card", app: app)
         app.swipeUp()
-        XCTAssertTrue(app.staticTexts["share.instagramUnavailable"].exists)
-        XCTAssertFalse(app.buttons["share.instagram"].exists)
+        XCTAssertFalse(app.staticTexts["share.instagramUnavailable"].exists)
+        XCTAssertTrue(app.buttons["share.instagram"].exists)
+        XCTAssertTrue(app.buttons["share.instagram"].isEnabled)
         XCTAssertTrue(app.buttons["share.export"].exists)
     }
 
