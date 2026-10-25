@@ -8,20 +8,21 @@ final class FoodCaloriesUITests: XCTestCase {
         let name = "Food photo QA \(UUID().uuidString.prefix(8))"
         let app = launchApp()
         openFoodTab(in: app)
+        app.buttons["food.mealKind.lunch"].tap()
         selectFirstPhoto(in: app)
 
         let analyze = app.buttons["food.analyze"]
         XCTAssertTrue(analyze.waitForExistence(timeout: 15))
-        XCTAssertFalse(app.buttons["food.confirm"].exists)
+        XCTAssertFalse(app.buttons["food.directInput"].exists)
         XCTAssertFalse(app.buttons["food.register"].exists)
         analyze.tap()
-        let confirm = app.buttons["food.confirm"]
-        XCTAssertTrue(confirm.waitForExistence(timeout: 90), app.debugDescription)
+        let directInput = app.buttons["food.directInput"]
+        XCTAssertTrue(directInput.waitForExistence(timeout: 90), app.debugDescription)
         XCTAssertFalse(app.staticTexts["food.status"].exists)
         XCTAssertFalse(app.textFields["food.calories"].exists)
-        XCTAssertFalse(app.buttons["food.register"].exists)
-        capture("Recognized food awaits confirmation", in: app)
-        confirm.tap()
+        capture("Recognized food awaits registration or manual review", in: app)
+        reveal(directInput, in: app)
+        directInput.tap()
 
         replace(name, in: app.descendants(matching: .any)["food.name"].firstMatch, app: app)
         replace("1인분", in: app.descendants(matching: .any)["food.portion"].firstMatch, app: app)
@@ -29,10 +30,12 @@ final class FoodCaloriesUITests: XCTestCase {
         replace("45", in: app.textFields["food.carbs"], app: app)
         replace("20", in: app.textFields["food.protein"], app: app)
         replace("15", in: app.textFields["food.fat"], app: app)
-        app.buttons["food.back"].tap()
-        XCTAssertTrue(confirm.waitForExistence(timeout: 5))
-        XCTAssertFalse(app.buttons["food.register"].exists)
-        confirm.tap()
+        let back = app.buttons["food.back"]
+        reveal(back, in: app)
+        back.tap()
+        XCTAssertTrue(directInput.waitForExistence(timeout: 5))
+        reveal(directInput, in: app)
+        directInput.tap()
         XCTAssertEqual(app.descendants(matching: .any)["food.name"].firstMatch.value as? String, name)
         XCTAssertEqual(app.textFields["food.calories"].value as? String, "410")
 
@@ -49,8 +52,11 @@ final class FoodCaloriesUITests: XCTestCase {
         let saved = app.staticTexts["food.saved"]
         XCTAssertTrue(saved.waitForExistence(timeout: 10), app.debugDescription)
         XCTAssertEqual(saved.label, "푸루(기록했어!)")
+        let eatingUsagi = app.descendants(matching: .any)["food.usagi"].firstMatch
+        XCTAssertTrue(eatingUsagi.exists)
+        XCTAssertEqual(eatingUsagi.value as? String, "grass", "The banana fixture must use the AI's fruit/grass eating style.")
         XCTAssertFalse(app.buttons["food.register"].exists)
-        capture("Saved meal with silent Usagi confirmation", in: app)
+        capture("Saved meal with matching silent eating motion", in: app)
 
         app.terminate()
         app.launch()
@@ -67,6 +73,9 @@ final class FoodCaloriesUITests: XCTestCase {
         XCTAssertTrue(nutrients.exists)
         XCTAssertTrue(nutrients.label.contains("단백질 20g"))
         XCTAssertTrue(nutrients.label.contains("지방 15g"))
+        XCTAssertTrue(row.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "점심")).firstMatch.exists,
+                      "The meal type selected before importing must persist.")
+        XCTAssertTrue(row.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "직접 입력")).firstMatch.exists)
         XCTAssertFalse(row.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "AI 추정")).firstMatch.exists,
                        "Edited values must be saved with the manual source.")
         capture("One edited meal persisted after relaunch", in: app)
@@ -82,14 +91,14 @@ final class FoodCaloriesUITests: XCTestCase {
         openFoodTab(in: app)
         app.buttons["food.camera"].tap()
         dismissCameraPermissionIfPresent()
-        let status = app.staticTexts["food.status"]
+        let status = app.staticTexts["food.cameraStatus"]
         XCTAssertTrue(status.waitForExistence(timeout: 10))
         XCTAssertTrue(status.label.contains("카메라"))
         XCTAssertTrue(app.buttons["food.library"].isEnabled)
         XCTAssertFalse(app.staticTexts["food.saved"].exists)
         selectFirstPhoto(in: app)
         XCTAssertTrue(app.buttons["food.analyze"].waitForExistence(timeout: 15))
-        XCTAssertFalse(app.buttons["food.confirm"].exists)
+        XCTAssertFalse(app.buttons["food.directInput"].exists)
         capture("Photo library after camera denial or unavailability", in: app)
         #endif
     }
@@ -112,6 +121,8 @@ final class FoodCaloriesUITests: XCTestCase {
 
     private func openFoodTab(in app: XCUIApplication) {
         app.tabBars.buttons["음식 칼로리"].tap()
+        XCTAssertTrue(app.buttons["food.close"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.tabBars.firstMatch.exists, "The food flow must hide the main tab bar.")
     }
 
     private func selectFirstPhoto(in app: XCUIApplication) {
@@ -131,7 +142,14 @@ final class FoodCaloriesUITests: XCTestCase {
     }
 
     private func openMeals(in app: XCUIApplication) {
-        app.tabBars.buttons["홈"].tap()
+        let closeFood = app.buttons["food.close"]
+        if closeFood.exists {
+            reveal(closeFood, in: app)
+            closeFood.tap()
+        }
+        let home = app.tabBars.buttons["홈"]
+        XCTAssertTrue(home.waitForExistence(timeout: 5))
+        home.tap()
         let addMeal = app.buttons["addMeal"]
         reveal(addMeal, in: app)
         addMeal.tap()

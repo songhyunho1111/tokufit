@@ -1,0 +1,27 @@
+.DS_Store
+.build/
+.swiftpm/
+DerivedData/
+build/
+*.xcuserstate
+xcuserdata/
+*.xcresult
+node_modules/
+dist/
+.env
+.env.*
+!.env.example
+*.p12
+*.mobileprovision
+*.pem
+*.key
+*.dump
+*.sql.gz
+# Local documentation and design references
+*.[mM][dD]
+docs/
+/ball.png
+
+# Python caches
+__pycache__/
+*.py[cod]

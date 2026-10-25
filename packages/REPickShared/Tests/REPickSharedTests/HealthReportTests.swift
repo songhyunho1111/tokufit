@@ -81,7 +81,8 @@ private func reportState(at date: Date) throws -> UsagiState {
     let meals = try #require(records["meals"] as? [[String: Any]])
     #expect(meals.first?["nutrients"] is NSNull)
     let workouts = try #require(records["workouts"] as? [[String: Any]])
-    for field in ["calories", "distanceMeters", "repetitions"] { #expect(workouts.first?[field] is NSNull) }
+    #expect(workouts.first?["calories"] as? Int == 70)
+    for field in ["distanceMeters", "repetitions"] { #expect(workouts.first?[field] is NSNull) }
     let wellness = try #require(records["wellness"] as? [[String: Any]])
     #expect(wellness.first?["condition"] is NSNull)
 }

@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { FastifyInstance } from "fastify";
 import sharp from "sharp";
+import { Value } from "@sinclair/typebox/value";
 import { buildApp } from "../src/app.js";
 import { configuration } from "../src/config.js";
 import type {
@@ -8,6 +9,10 @@ import type {
   FoodPhotoAnalysisResult,
   FoodPhotoAnalyzer,
   FoodPhotoImage,
+} from "../src/foods/contracts.js";
+import {
+  FoodPhotoAnalysisSchema,
+  FoodPhotoAnalysisResultSchema,
 } from "../src/foods/contracts.js";
 import { FoodServiceError } from "../src/foods/errors.js";
 import { FoodPhotoAnalysisService } from "../src/foods/service.js";
@@ -25,6 +30,7 @@ function result(): FoodPhotoAnalysisResult {
   return {
     model: "test-vision-model",
     status: "recognized",
+    alternatives: [],
     message: "사진으로 추정한 값이에요. 음식과 양을 확인해 주세요.",
     food: {
       name: "바나나",
@@ -32,6 +38,7 @@ function result(): FoodPhotoAnalysisResult {
       calories: 105,
       nutrients: { carbohydratesG: 27, proteinG: 1.3, fatG: 0.4 },
       notes: "실제 크기에 따라 달라질 수 있어요.",
+      eatingStyle: "grass",
     },
   };
 }
@@ -91,6 +98,49 @@ function post(
 }
 
 describe("food photo analysis API", () => {
+  it.each(["grass", "noodles", "rice", "tteokbokki"] as const)(
+    "returns the selected %s motion through response serialization",
+    async (eatingStyle) => {
+      const selected = result();
+      if (!selected.food) throw new Error("Fixture requires food.");
+      selected.food.eatingStyle = eatingStyle;
+      const { app } = await server(async () => selected);
+      const response = await post(app, await image());
+      expect(response.statusCode).toBe(201);
+      expect(
+        response.json<{ data: FoodPhotoAnalysis }>().data.food?.eatingStyle,
+      ).toBe(eatingStyle);
+    },
+  );
+
+  it.each([undefined, null, "soup"])(
+    "rejects missing or invalid new eating motion %s at the service boundary",
+    async (eatingStyle) => {
+      const invalid = result();
+      if (!invalid.food) throw new Error("Fixture requires food.");
+      Object.assign(invalid.food, { eatingStyle });
+      const { app } = await server(async () => invalid);
+      const response = await post(app, await image());
+      expect(response.statusCode).toBe(502);
+      expect(response.json<{ code: string }>().code).toBe(
+        "FOOD_LLM_INVALID_RESPONSE",
+      );
+    },
+  );
+
+  it.each([undefined, null])(
+    "accepts legacy response motion %s only in the public schema",
+    (eatingStyle) => {
+      const legacy = result();
+      if (!legacy.food) throw new Error("Fixture requires food.");
+      Object.assign(legacy.food, { eatingStyle });
+      expect(
+        Value.Check(FoodPhotoAnalysisSchema.properties.food, legacy.food),
+      ).toBe(true);
+      expect(Value.Check(FoodPhotoAnalysisResultSchema, legacy)).toBe(false);
+    },
+  );
+
   it.each(["jpeg", "png"] as const)(
     "validates and strips %s metadata before returning a typed review resource",
     async (format) => {
@@ -127,6 +177,7 @@ describe("food photo analysis API", () => {
       model: "test",
       status: "unrecognized",
       food: null,
+      alternatives: [],
       message: "음식이 잘 보이도록 다시 찍어 주세요.",
     }));
     const response = await post(app, await image());

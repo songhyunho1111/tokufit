@@ -1,3 +1,4 @@
+import REPickShared
 import CoreLocation
 import MapKit
 import Observation
@@ -141,9 +142,9 @@ struct DestinationSearchView: View {
                     List(Array(model.results.enumerated()), id: \.element.id) { index, result in
                         Button { onSelect(result) } label: {
                             VStack(alignment: .leading, spacing: 4) {
-                                Text(result.name).font(.body.weight(.semibold)).foregroundStyle(Color.repickInk)
+                                Text(result.name).font(AppFont.font(.body, weight: .semibold)).foregroundStyle(Color.repickInk)
                                 if !result.address.isEmpty {
-                                    Text(result.address).font(.subheadline).foregroundStyle(Color.repickSecondaryText)
+                                    Text(result.address).font(AppFont.font(.subheadline)).foregroundStyle(Color.repickSecondaryText)
                                 }
                             }
                             .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)

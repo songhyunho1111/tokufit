@@ -9,7 +9,7 @@ private let foodPhotoPNG = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lE
 private func foodPhotoEstimate() throws -> FoodEstimate {
     try FoodEstimate(name: "비빔밥", portion: "한 그릇", calories: 560,
                      nutrients: MealNutrients(carbohydratesG: 80.5, proteinG: 20, fatG: 17.5),
-                     notes: "사진만으로 분량을 정확히 알기 어려워요.")
+                     notes: "사진만으로 분량을 정확히 알기 어려워요.", eatingStyle: .rice)
 }
 
 private func foodPhotoResponse(status: FoodPhotoAnalysis.Status = .recognized) throws -> FoodPhotoAnalysisResponse {
@@ -68,7 +68,10 @@ private func foodPhotoState() throws -> UsagiState {
         #expect(decoded == response)
         let text = String(decoding: encoded, as: UTF8.self)
         #expect(text.contains(".000Z"))
-        if status == .unrecognized { #expect(text.contains("\"food\":null")) }
+        if status == .unrecognized {
+            #expect(text.contains("\"food\":null"))
+            #expect(!text.contains("eatingStyle"))
+        }
     }
     let fractional = """
     {"data":{"id":"4EAB0984-8096-4445-898C-997612F5A1A9","createdAt":"2026-10-24T10:00:00.123Z",\
@@ -80,12 +83,55 @@ private func foodPhotoState() throws -> UsagiState {
     try decoded.validate()
     #expect(decoded.data.food?.nutrients.carbohydratesG == 80.5)
     #expect(decoded.data.food?.calories == 560)
+    #expect(decoded.data.food?.eatingStyle == nil)
     #expect(abs(decoded.data.createdAt.timeIntervalSince1970.truncatingRemainder(dividingBy: 1) - 0.123) < 0.001)
 
     let unrecognized = try HealthReportCoding.encoder().encode(foodPhotoResponse(status: .unrecognized))
     let missingFood = String(decoding: unrecognized, as: UTF8.self).replacingOccurrences(of: "\"food\":null,", with: "")
     #expect(throws: DecodingError.self) {
         try HealthReportCoding.decoder().decode(FoodPhotoAnalysisResponse.self, from: Data(missingFood.utf8))
+    }
+}
+
+@Test(arguments: FoodEatingStyle.allCases)
+func foodPhotoEatingStyleRoundTrips(style: FoodEatingStyle) throws {
+    let original = try foodPhotoEstimate()
+    let estimate = try FoodEstimate(name: original.name, portion: original.portion, calories: original.calories,
+                                    nutrients: original.nutrients, notes: original.notes, eatingStyle: style)
+    let encoded = try JSONEncoder().encode(estimate)
+    let object = try #require(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
+    #expect(object["eatingStyle"] as? String == style.rawValue)
+    let decoded = try JSONDecoder().decode(FoodEstimate.self, from: encoded)
+    try decoded.validate()
+    #expect(decoded == estimate)
+}
+
+@Test func foodPhotoEatingStylePreservesLegacyMissingNullAndInitializer() throws {
+    let original = try foodPhotoEstimate()
+    let legacy = try FoodEstimate(name: original.name, portion: original.portion, calories: original.calories,
+                                 nutrients: original.nutrients, notes: original.notes)
+    #expect(legacy.eatingStyle == nil)
+    let missing = try JSONEncoder().encode(legacy)
+    #expect(!String(decoding: missing, as: UTF8.self).contains("eatingStyle"))
+    var object = try #require(JSONSerialization.jsonObject(with: missing) as? [String: Any])
+    object["eatingStyle"] = NSNull()
+    let explicitNull = try JSONSerialization.data(withJSONObject: object)
+    for data in [missing, explicitNull] {
+        let decoded = try JSONDecoder().decode(FoodEstimate.self, from: data)
+        try decoded.validate()
+        #expect(decoded == legacy)
+        #expect(decoded.eatingStyle == nil)
+    }
+}
+
+@Test(arguments: ["\"soup\"", "\"Rice\"", "\"\"", "42", "{}"])
+func foodPhotoEatingStyleRejectsInvalidValues(style: String) throws {
+    let json = """
+    {"name":"식사","portion":"한 그릇","calories":100,\
+    "nutrients":{"carbohydratesG":10,"proteinG":5,"fatG":2},"notes":"","eatingStyle":\(style)}
+    """
+    #expect(throws: DecodingError.self) {
+        try JSONDecoder().decode(FoodEstimate.self, from: Data(json.utf8))
     }
 }
 

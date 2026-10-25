@@ -20,6 +20,11 @@ struct MapUsagiView: UIViewRepresentable {
     var character: CharacterKind = .usagi
     var equippedItems: [WardrobeItem] = []
     var reportReaction: HealthReportReaction? = nil
+    var eatingStyle: FoodEatingStyle? = nil
+    var muscleLevel: Double = 0
+    var fieryEyes = false
+    var nutritionMood: NutritionMood = .neutral
+    var costume: CostumeStyle? = nil
 
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -46,9 +51,12 @@ struct MapUsagiView: UIViewRepresentable {
         context.coordinator.update(bodyScale: bodyScale, outfit: outfit, walking: isWalking, animated: animated,
                                    heading: heading, cameraHeading: cameraHeading,
                                    motion: displayedMotion, waterLevel: waterLevel, onboardingPose: onboardingPose,
-                                   character: character, equippedItems: equippedItems, reportReaction: reportReaction)
+                                   character: character, equippedItems: equippedItems, reportReaction: reportReaction,
+                                   eatingStyle: eatingStyle, muscleLevel: muscleLevel, fieryEyes: fieryEyes,
+                                   nutritionMood: nutritionMood, costume: costume)
         view.isPlaying = animated
         view.accessibilityIdentifier = accessibilityIdentifier
+        view.accessibilityValue = eatingStyle?.rawValue
         switch displayedMotion {
         case .idle: view.accessibilityLabel = String(localized: "쉬는 3D 우사기")
         case .walking: view.accessibilityLabel = String(localized: "걷는 3D 우사기")
@@ -66,8 +74,27 @@ struct MapUsagiView: UIViewRepresentable {
             case .curious: view.accessibilityLabel = String(localized: "고개를 기울여 살펴보는 3D 우사기")
             }
         }
+        if let eatingStyle {
+            switch eatingStyle {
+            case .grass: view.accessibilityLabel = String(localized: "풀을 먹는 3D 우사기")
+            case .noodles: view.accessibilityLabel = String(localized: "면을 먹는 3D 우사기")
+            case .rice: view.accessibilityLabel = String(localized: "밥을 먹는 3D 우사기")
+            case .tteokbokki: view.accessibilityLabel = String(localized: "떡볶이를 먹는 3D 우사기")
+            }
+        }
         if character != .usagi {
             view.accessibilityLabel = view.accessibilityLabel?.replacingOccurrences(of: "우사기", with: character.name)
+        }
+        if let costume {
+            view.accessibilityLabel = (view.accessibilityLabel ?? character.name) + ", " + costume.name
+        }
+        if nutritionMood == .sparkling {
+            view.accessibilityLabel = (view.accessibilityLabel ?? character.name) + String(localized: ", 금빛 반짝임")
+        } else if nutritionMood == .lowEnergy {
+            view.accessibilityLabel = (view.accessibilityLabel ?? character.name) + String(localized: ", 조용히 쉬는 모습")
+        }
+        if fieryEyes {
+            view.accessibilityLabel = (view.accessibilityLabel ?? character.name) + String(localized: ", 불꽃 눈")
         }
     }
 
@@ -90,6 +117,12 @@ struct MapUsagiView: UIViewRepresentable {
         private let wardrobe = SCNNode()
         private let props = SCNNode()
         private let waterWave = SCNNode()
+        private let muscleDetails = SCNNode()
+        private let fullCostume = SCNNode()
+        private let costumeHeldProps = SCNNode()
+        private let nutritionEffect = SCNNode()
+        private var eyes: [SCNNode] = []
+        private var flames: [SCNNode] = []
         private var arms: [SCNNode] = []
         private var feet: [SCNNode] = []
         private var ears: [SCNNode] = []
@@ -97,12 +130,17 @@ struct MapUsagiView: UIViewRepresentable {
         private var lastMotion: UsagiMotion?
         private var lastOnboardingPose: UsagiOnboardingPose?
         private var lastReportReaction: HealthReportReaction?
+        private var lastEatingStyle: FoodEatingStyle?
         private var lastWaterLevel: Double?
         private var lastAnimated: Bool?
         private var lastBodyScale: Float?
         private var lastYaw: Double?
         private var character: CharacterKind = .usagi
         private var lastItems: [WardrobeItem]?
+        private var muscleLevel: CGFloat = 0
+        private var lastFieryEyes: Bool?
+        private var lastCostume: CostumeStyle?
+        private var lastNutritionMood: NutritionMood?
 
         private var fur: UIColor { character == .usagi ? UIColor(red: 1, green: 241.0 / 255, blue: 203.0 / 255, alpha: 1) : UIColor(white: 0.985, alpha: 1) }
         private let hachiwareBlue = UIColor(red: 128 / 255, green: 177 / 255, blue: 200 / 255, alpha: 1)
@@ -121,18 +159,28 @@ struct MapUsagiView: UIViewRepresentable {
             rabbit.addChildNode(wardrobe)
             props.name = "care.motion.props"
             waterWave.name = "care.water"
+            torso.name = "character.body"
+            muscleDetails.name = "character.muscles"
             rabbit.addChildNode(props)
             rabbit.addChildNode(waterWave)
+            rabbit.addChildNode(muscleDetails)
+            fullCostume.name = "character.costume"
+            costumeHeldProps.name = "costume.heldProps"
+            nutritionEffect.name = "nutrition.effect"
+            rabbit.addChildNode(fullCostume)
+            rabbit.addChildNode(nutritionEffect)
             makeBody()
             makeFace()
             makeLightsAndCamera()
         }
 
-        func update(bodyScale: Double, outfit: Outfit, walking: Bool, animated: Bool, heading: Double = 0, cameraHeading: Double = 0, motion: UsagiMotion? = nil, waterLevel: Double = 0, onboardingPose: UsagiOnboardingPose? = nil, character: CharacterKind = .usagi, equippedItems: [WardrobeItem] = [], reportReaction: HealthReportReaction? = nil) {
+        func update(bodyScale: Double, outfit: Outfit, walking: Bool, animated: Bool, heading: Double = 0, cameraHeading: Double = 0, motion: UsagiMotion? = nil, waterLevel: Double = 0, onboardingPose: UsagiOnboardingPose? = nil, character: CharacterKind = .usagi, equippedItems: [WardrobeItem] = [], reportReaction: HealthReportReaction? = nil, eatingStyle: FoodEatingStyle? = nil, muscleLevel: Double = 0, fieryEyes: Bool = false, nutritionMood: NutritionMood = .neutral, costume: CostumeStyle? = nil) {
             if self.character != character { rebuildCharacter(character) }
             updateOrientation(heading: heading, cameraHeading: cameraHeading, animated: animated)
             let width = Float(min(1.6, max(0.75, bodyScale.isFinite ? bodyScale : 1)))
-            let widthChanged = width != lastBodyScale
+            let strength = CGFloat(min(1, max(0, muscleLevel.isFinite ? muscleLevel : 0)))
+            let widthChanged = width != lastBodyScale || strength != self.muscleLevel
+            self.muscleLevel = strength
             if widthChanged {
                 let mesh = bodyGeometry(width: width)
                 mesh.firstMaterial = material(fur)
@@ -141,39 +189,67 @@ struct MapUsagiView: UIViewRepresentable {
                 let shoulder = Float(bodySection(at: 0.82, width: width).x) - 0.01
                 for (index, arm) in arms.enumerated() { arm.position.x = (index == 0 ? -shoulder : shoulder) }
                 for (index, foot) in feet.enumerated() { foot.position.x = (index == 0 ? -footSpacing : footSpacing) * min(1.2, width) }
+                frameCharacter()
                 lastBodyScale = width
             }
-            if lastOutfit != outfit || widthChanged {
+            let costumeChanged = lastCostume != costume
+            let outfitChanged = lastOutfit != outfit
+            let itemsChanged = lastItems != equippedItems
+            let costumeNeedsUpdate = costumeChanged || widthChanged || outfitChanged || itemsChanged
+            if outfitChanged || widthChanged || costumeChanged {
                 setOutfit(outfit, width: width)
+                setMuscles(width: width, outfit: outfit)
+                muscleDetails.isHidden = costume != nil
                 lastOutfit = outfit
             }
-            if lastItems != equippedItems || widthChanged {
+            if itemsChanged || widthChanged || costumeChanged {
                 setItems(equippedItems, width: width)
                 lastItems = equippedItems
             }
+            if costumeNeedsUpdate {
+                setCostume(costume, width: width, outfit: outfit, items: equippedItems)
+                lastCostume = costume
+            }
             let displayedMotion = motion ?? (walking ? .walking : .idle)
+            if lastFieryEyes != fieryEyes || lastAnimated != animated {
+                setFieryEyes(fieryEyes, animated: animated)
+                lastFieryEyes = fieryEyes
+            }
             let level = min(1, max(0, waterLevel.isFinite ? waterLevel : 0))
             if lastWaterLevel != level || widthChanged || lastAnimated != animated {
                 setWater(level: level, width: width, animated: animated)
                 lastWaterLevel = level
             }
-            if lastMotion != displayedMotion || lastAnimated != animated || widthChanged || lastOnboardingPose != onboardingPose || lastReportReaction != reportReaction {
-                if let reportReaction {
+            if lastMotion != displayedMotion || lastAnimated != animated || widthChanged || lastOnboardingPose != onboardingPose || lastReportReaction != reportReaction || lastEatingStyle != eatingStyle || lastNutritionMood != nutritionMood || costumeNeedsUpdate {
+                if lastEatingStyle != nil || eatingStyle != nil { clearEatingStyle() }
+                if let eatingStyle {
+                    setEatingStyle(eatingStyle, animated: animated, width: width)
+                } else if let reportReaction {
                     setReportReaction(reportReaction, animated: animated, width: width)
                 } else if let onboardingPose {
                     setOnboardingPose(onboardingPose, animated: animated, width: width)
                 } else {
-                    if lastOnboardingPose != nil || lastReportReaction != nil {
+                    if lastOnboardingPose != nil || lastReportReaction != nil || lastEatingStyle != nil || lastNutritionMood == .lowEnergy {
                         for (index, ear) in ears.enumerated() {
                             transitionPose(ear, rotation: SCNVector3(0, 0, index == 0 ? -0.055 : 0.055), animated: animated)
                         }
                     }
                     setPresentationMotion(displayedMotion, animated: animated, width: width)
                 }
+                let resting = displayedMotion == .idle && eatingStyle == nil && reportReaction == nil && onboardingPose == nil
+                setCostumePose(costume, resting: resting, animated: animated)
+                if nutritionMood == .lowEnergy && resting {
+                    setLowEnergyPose(animated: animated)
+                }
                 lastMotion = displayedMotion
                 lastOnboardingPose = onboardingPose
                 lastReportReaction = reportReaction
+                lastEatingStyle = eatingStyle
             }
+            if lastNutritionMood != nutritionMood || lastAnimated != animated || widthChanged {
+                setNutritionEffect(nutritionMood, animated: animated, width: width)
+            }
+            lastNutritionMood = nutritionMood
             lastAnimated = animated
             scene.isPaused = !animated
         }
@@ -181,11 +257,13 @@ struct MapUsagiView: UIViewRepresentable {
         private var footSpacing: Float { character == .usagi ? 0.105 : 0.32 }
 
         private func rebuildCharacter(_ kind: CharacterKind) {
+            clearEatingStyle()
+            flames.forEach { $0.removeAllActions() }
             rabbit.removeAllActions()
             rabbit.childNodes.forEach { $0.removeFromParentNode() }
             feet.forEach { $0.removeFromParentNode() }
-            arms.removeAll(); feet.removeAll(); ears.removeAll()
-            for node in [torso, bodyOutline, clothing, headwear, wardrobe, props, waterWave] {
+            arms.removeAll(); feet.removeAll(); ears.removeAll(); eyes.removeAll(); flames.removeAll()
+            for node in [torso, bodyOutline, clothing, headwear, wardrobe, props, waterWave, muscleDetails, fullCostume, costumeHeldProps, nutritionEffect] {
                 node.removeAllActions()
                 node.removeAllAnimations()
                 node.childNodes.forEach { $0.removeFromParentNode() }
@@ -194,12 +272,13 @@ struct MapUsagiView: UIViewRepresentable {
             rabbit.position = .init(0, 0, 0)
             rabbit.eulerAngles = .init(0, 0, 0)
             self.character = kind
-            for node in [torso, clothing, headwear, wardrobe, props, waterWave] { rabbit.addChildNode(node) }
+            for node in [torso, clothing, headwear, wardrobe, props, waterWave, muscleDetails, fullCostume, nutritionEffect] { rabbit.addChildNode(node) }
             makeBody()
             makeFace()
             frameCharacter()
             lastBodyScale = nil; lastOutfit = nil; lastItems = nil
-            lastMotion = nil; lastOnboardingPose = nil; lastReportReaction = nil; lastWaterLevel = nil; lastAnimated = nil
+            lastFieryEyes = nil; lastCostume = nil; lastNutritionMood = nil
+            lastMotion = nil; lastOnboardingPose = nil; lastReportReaction = nil; lastEatingStyle = nil; lastWaterLevel = nil; lastAnimated = nil
         }
 
         private func updateOrientation(heading: Double, cameraHeading: Double, animated: Bool) {
@@ -270,6 +349,7 @@ struct MapUsagiView: UIViewRepresentable {
                 ears.append(ear)
 
                 let arm = SCNNode()
+                arm.name = "character.arm"
                 arm.position = SCNVector3(side * 0.76, 0.82, 0.06)
                 arm.eulerAngles.z = side * 0.17
                 arm.addChildNode(ellipsoid(size: SCNVector3(0.077, 0.155, 0.095), position: SCNVector3(0, -0.105, 0), color: fur, outlined: true))
@@ -342,6 +422,14 @@ struct MapUsagiView: UIViewRepresentable {
                 lowerGlint.position.z = 0.029
                 eye.addChildNode(lowerGlint)
                 rabbit.addChildNode(eye)
+                eye.name = "character.eye"
+                eyes.append(eye)
+                let flame = flameEye()
+                flame.position = eye.position
+                flame.eulerAngles = eye.eulerAngles
+                flame.isHidden = true
+                rabbit.addChildNode(flame)
+                flames.append(flame)
 
                 if character == .usagi {
                     let brow = cubic(CGPoint(x: -0.56, y: 1.68), CGPoint(x: -0.55, y: 1.87), CGPoint(x: -0.42, y: 1.95), CGPoint(x: -0.28, y: 1.95))
@@ -362,7 +450,11 @@ struct MapUsagiView: UIViewRepresentable {
             }
             var mouth = cubic(CGPoint(x: -0.13, y: 1.32), CGPoint(x: -0.15, y: 1.21), CGPoint(x: -0.025, y: 1.20), CGPoint(x: 0, y: 1.30))
             mouth += cubic(CGPoint(x: 0, y: 1.30), CGPoint(x: 0.025, y: 1.20), CGPoint(x: 0.15, y: 1.21), CGPoint(x: 0.13, y: 1.32)).dropFirst()
-            rabbit.addChildNode(surfaceStroke(mouth, thickness: 0.026, color: ink))
+            let mouthNode = surfaceStroke(mouth, thickness: 0.026, color: ink)
+            mouthNode.name = "character.mouth"
+            mouthNode.pivot = SCNMatrix4MakeTranslation(0, 1.25, 0)
+            mouthNode.position.y = 1.25
+            rabbit.addChildNode(mouthNode)
             if character == .usagi {
                 let curl = cubic(CGPoint(x: -0.015, y: 1.245), CGPoint(x: -0.025, y: 1.15), CGPoint(x: 0.010, y: 1.12), CGPoint(x: 0.065, y: 1.12))
                 rabbit.addChildNode(surfaceStroke(curl, thickness: 0.024, color: ink))
@@ -414,6 +506,70 @@ struct MapUsagiView: UIViewRepresentable {
             cap.name = "character.hachiware.cap"
             cap.addChildNode(surfaceStroke(frontSeam, thickness: 0.026, color: ink, padding: 0.028))
             return cap
+        }
+
+        private func flameEye() -> SCNNode {
+            let flame = SCNNode()
+            flame.name = "character.fieryEye"
+            let path = UIBezierPath()
+            path.move(to: CGPoint(x: 0, y: -0.105))
+            path.addCurve(to: CGPoint(x: -0.095, y: 0.075), controlPoint1: CGPoint(x: -0.13, y: -0.10), controlPoint2: CGPoint(x: -0.14, y: 0.01))
+            path.addCurve(to: CGPoint(x: -0.045, y: 0.18), controlPoint1: CGPoint(x: -0.06, y: 0.11), controlPoint2: CGPoint(x: -0.055, y: 0.15))
+            path.addCurve(to: CGPoint(x: -0.015, y: 0.075), controlPoint1: CGPoint(x: -0.025, y: 0.15), controlPoint2: CGPoint(x: -0.025, y: 0.105))
+            path.addCurve(to: CGPoint(x: 0.025, y: 0.24), controlPoint1: CGPoint(x: 0.04, y: 0.12), controlPoint2: CGPoint(x: 0.01, y: 0.19))
+            path.addCurve(to: CGPoint(x: 0.09, y: 0.08), controlPoint1: CGPoint(x: 0.10, y: 0.18), controlPoint2: CGPoint(x: 0.055, y: 0.13))
+            path.addCurve(to: CGPoint(x: 0, y: -0.105), controlPoint1: CGPoint(x: 0.18, y: -0.015), controlPoint2: CGPoint(x: 0.105, y: -0.105))
+            path.close()
+            path.flatness = 0.001
+            for (scale, color, depth) in [(1.0, UIColor(red: 0.79, green: 0.20, blue: 0.08, alpha: 1), 0.024),
+                                          (0.84, UIColor(red: 1, green: 0.44, blue: 0.08, alpha: 1), 0.042),
+                                          (0.54, UIColor(red: 1, green: 0.88, blue: 0.32, alpha: 1), 0.060)] {
+                let shape = SCNShape(path: path, extrusionDepth: 0.012)
+                shape.chamferRadius = 0.003
+                shape.firstMaterial = flatMaterial(color)
+                let layer = SCNNode(geometry: shape)
+                layer.scale = SCNVector3(Float(scale), Float(scale), 1)
+                layer.position = SCNVector3(0, Float((scale - 1) * 0.08), Float(depth))
+                flame.addChildNode(layer)
+            }
+            return flame
+        }
+
+        private func setFieryEyes(_ enabled: Bool, animated: Bool) {
+            eyes.forEach { $0.isHidden = enabled }
+            for flame in flames {
+                flame.removeAllActions()
+                flame.scale = SCNVector3(1, 1, 1)
+                flame.isHidden = !enabled
+                if enabled && animated {
+                    flame.runAction(.repeatForever(.sequence([
+                        eased(.scale(to: 1.06, duration: 0.55)),
+                        eased(.scale(to: 1, duration: 0.55))
+                    ])), forKey: "attendance.flame")
+                }
+            }
+        }
+
+        private func setMuscles(width: Float, outfit: Outfit) {
+            muscleDetails.childNodes.forEach { $0.removeFromParentNode() }
+            let strength = Float(muscleLevel)
+            for (index, arm) in arms.enumerated() {
+                arm.childNode(withName: "character.bicep", recursively: false)?.removeFromParentNode()
+                arm.childNodes.first?.scale = SCNVector3(0.077 * (1 + strength * 0.9), 0.155 * (1 + strength * 0.16), 0.095 * (1 + strength * 0.5))
+                guard strength > 0 else { continue }
+                let side: Float = index == 0 ? -1 : 1
+                let bicep = ellipsoid(size: SCNVector3(0.115, 0.11, 0.12), position: SCNVector3(side * 0.025, -0.025, 0.015), color: fur, outlined: true)
+                bicep.name = "character.bicep"
+                bicep.scale = SCNVector3(0.055 + strength * 0.06, 0.075 + strength * 0.035, 0.07 + strength * 0.05)
+                arm.addChildNode(bicep)
+            }
+            guard strength > 0, outfit == .basic else { return }
+            let contour = character == .usagi ? UIColor(red: 0.63, green: 0.51, blue: 0.35, alpha: 1) : UIColor(white: 0.62, alpha: 1)
+            for side: CGFloat in [-1, 1] {
+                let chest = cubic(CGPoint(x: side * 0.055, y: 0.84), CGPoint(x: side * 0.14, y: 0.76), CGPoint(x: side * 0.32, y: 0.77), CGPoint(x: side * 0.40, y: 0.86))
+                muscleDetails.addChildNode(surfaceStroke(chest, thickness: 0.014, color: contour, width: width, padding: 0.017))
+            }
+            muscleDetails.opacity = muscleLevel
         }
 
         private func setOutfit(_ outfit: Outfit, width: Float) {
@@ -503,6 +659,331 @@ struct MapUsagiView: UIViewRepresentable {
                     group.addChildNode(surfaceStroke([CGPoint(x: -0.13, y: 1.51), CGPoint(x: 0.13, y: 1.51)], thickness: 0.025, color: navy, padding: 0.08))
                 }
                 wardrobe.addChildNode(group)
+            }
+        }
+
+        private func setCostume(_ style: CostumeStyle?, width: Float, outfit: Outfit, items: [WardrobeItem]) {
+            fullCostume.childNodes.forEach { $0.removeFromParentNode() }
+            costumeHeldProps.childNodes.forEach { $0.removeFromParentNode() }
+            for node in arms + ears {
+                node.childNodes.filter { $0.name?.hasPrefix("costume.") == true }.forEach { $0.removeFromParentNode() }
+            }
+            guard let style else { return }
+            let hasTop = outfit != .basic
+            let hasBottom = items.contains { $0.category == .bottom }
+            fullCostume.addChildNode(costumeHeldProps)
+            let cream = UIColor(red: 1, green: 0.96, blue: 0.84, alpha: 1)
+            switch style {
+            case .mermaidIsland:
+                if !hasBottom { addCostumeSkirt(width: width, grass: true) }
+                for index in 0..<7 {
+                    let x = CGFloat(index - 3) * 0.195
+                    let y = 2.07 - 0.17 * pow(x / 0.60, 2)
+                    let color = character == .hachiware && index.isMultiple(of: 2) ? UIColor(red: 0.70, green: 0.87, blue: 0.96, alpha: 1) : cream
+                    let flower = costumeFlower(color: color, radius: 0.082)
+                    flower.position = .init(Float(x), Float(y), Float(surfaceDepth(x: x, y: y)) + 0.09)
+                    fullCostume.addChildNode(flower)
+                }
+                for side: Float in [-1, 1] {
+                    let cup = ellipsoid(size: .init(0.16, 0.18, 0.14), position: .init(side * 0.24, 0.88, 0.78), color: UIColor(red: 0.87, green: 0.89, blue: 0.40, alpha: 1), outlined: true)
+                    cup.name = "costume.cup"
+                    let rim = SCNNode(geometry: SCNTorus(ringRadius: 0.77, pipeRadius: 0.055))
+                    rim.geometry?.firstMaterial = material(UIColor(red: 0.58, green: 0.67, blue: 0.20, alpha: 1))
+                    rim.position.y = 0.66
+                    cup.addChildNode(rim)
+                    costumeHeldProps.addChildNode(cup)
+                    let strawPath = UIBezierPath()
+                    strawPath.move(to: CGPoint(x: CGFloat(side) * 0.24, y: 0.99))
+                    strawPath.addLine(to: CGPoint(x: CGFloat(side) * 0.19, y: 1.17))
+                    strawPath.addLine(to: CGPoint(x: CGFloat(side) * 0.09, y: 1.20))
+                    let straw = stroke(strawPath, width: 0.025, color: cream)
+                    straw.position.z = 0.82
+                    costumeHeldProps.addChildNode(straw)
+                }
+            case .pajamas:
+                let color: UIColor = character == .chiikawa ? UIColor(red: 1, green: 0.70, blue: 0.76, alpha: 1) : character == .hachiware ? hachiwareBlue : UIColor(red: 1, green: 0.88, blue: 0.48, alpha: 1)
+                if !hasTop || !hasBottom {
+                    let range: ClosedRange<CGFloat> = (hasBottom ? 0.58 : 0.13)...(hasTop ? 0.55 : 1.10)
+                    let onesie = SCNNode(geometry: bodyGeometry(width: width, range: range, padding: 0.035))
+                    onesie.geometry?.firstMaterial = material(color)
+                    fullCostume.addChildNode(onesie)
+                }
+                let hood = costumeHood(color: color)
+                hood.name = "costume.hood"
+                fullCostume.addChildNode(hood)
+                for ear in ears {
+                    guard let source = ear.childNodes.first, let geometry = source.geometry?.copy() as? SCNGeometry else { continue }
+                    let cover = SCNNode(geometry: geometry)
+                    cover.name = "costume.earCover"
+                    cover.position = source.position
+                    cover.position.z -= 0.016
+                    cover.scale = SCNVector3(source.scale.x * 1.12, source.scale.y * 1.08, source.scale.z * 1.12)
+                    geometry.firstMaterial = material(color)
+                    ear.addChildNode(cover)
+                }
+                if !hasTop {
+                    addCostumeSleeves(color: color)
+                    for y: CGFloat in [0.81, 0.58] {
+                        fullCostume.addChildNode(ellipsoid(size: .init(0.035, 0.035, 0.025), position: .init(0, Float(y), Float(surfaceDepth(x: 0, y: y, width: width)) + 0.06), color: ink))
+                    }
+                }
+                let bag = ellipsoid(size: .init(0.16, 0.19, 0.075), position: .init(Float(bodySection(at: 0.70, width: width).x) + 0.05, 0.48, 0.18), color: .white, outlined: true)
+                bag.name = "costume.bag"
+                let handle = SCNNode(geometry: SCNTorus(ringRadius: 0.54, pipeRadius: 0.08))
+                handle.eulerAngles.x = .pi / 2
+                handle.position = .init(0, 1.03, 0)
+                handle.geometry?.firstMaterial = material(.white)
+                bag.addChildNode(handle)
+                fullCostume.addChildNode(bag)
+            case .gyaru:
+                let cardiganColor = character == .hachiware ? UIColor(red: 0.57, green: 0.58, blue: 0.83, alpha: 1) : cream
+                if !hasTop {
+                    let cardigan = SCNNode(geometry: bodyGeometry(width: width, range: 0.45...1.05, padding: 0.04))
+                    cardigan.geometry?.firstMaterial = material(cardiganColor)
+                    fullCostume.addChildNode(cardigan)
+                    addCostumeSleeves(color: cardiganColor)
+                    fullCostume.addChildNode(surfaceStroke([CGPoint(x: 0, y: 0.91), CGPoint(x: 0, y: 0.48)], thickness: 0.016, color: UIColor(red: 0.71, green: 0.64, blue: 0.52, alpha: 1), width: width, padding: 0.055))
+                    for y: CGFloat in [0.72, 0.55] {
+                        fullCostume.addChildNode(ellipsoid(size: .init(0.025, 0.025, 0.015), position: .init(0.045, Float(y), Float(surfaceDepth(x: 0.045, y: y, width: width)) + 0.07), color: ink))
+                    }
+                    for index in -5...5 {
+                        let x = CGFloat(index) * 0.105 * CGFloat(width)
+                        fullCostume.addChildNode(surfaceStroke([CGPoint(x: x, y: 0.63), CGPoint(x: x + 0.015, y: 0.67)], thickness: 0.011, color: ink, width: width, padding: 0.055))
+                    }
+                }
+                if !hasBottom { addCostumeSkirt(width: width, grass: false) }
+                let bow = costumeBow(color: character == .chiikawa ? pink : character == .hachiware ? cream : UIColor(red: 0.95, green: 0.76, blue: 0.28, alpha: 1))
+                let bowX: CGFloat = character == .chiikawa ? -0.48 : 0
+                let bowY: CGFloat = character == .chiikawa ? 0.63 : 0.98
+                bow.position = .init(Float(bowX), Float(bowY), Float(surfaceDepth(x: bowX, y: bowY, width: width)) + 0.12)
+                fullCostume.addChildNode(bow)
+                let flowerX: CGFloat = character == .hachiware ? -0.67 : 0.58
+                let flower = costumeFlower(color: UIColor(red: 1, green: 0.26, blue: 0.57, alpha: 1), radius: 0.15)
+                flower.position = .init(Float(flowerX), 2.06, Float(surfaceDepth(x: flowerX, y: 2.06)) + 0.13)
+                let stamenPath = UIBezierPath()
+                stamenPath.move(to: .zero)
+                stamenPath.addQuadCurve(to: CGPoint(x: 0.13, y: 0.16), controlPoint: CGPoint(x: 0.12, y: 0.04))
+                let stamen = stroke(stamenPath, width: 0.017, color: cream)
+                stamen.position.z = 0.085
+                flower.addChildNode(stamen)
+                flower.addChildNode(ellipsoid(size: .init(0.03, 0.03, 0.018), position: .init(0.13, 0.16, 0.09), color: .systemYellow))
+                fullCostume.addChildNode(flower)
+                for index in 0..<2 {
+                    let x = CGFloat(0.34 + Double(index) * 0.13), y = CGFloat(0.82 - Double(index) * 0.10)
+                    let heart = costumeHeart()
+                    heart.position = .init(Float(x), Float(y), Float(surfaceDepth(x: x, y: y, width: width)) + 0.075)
+                    fullCostume.addChildNode(heart)
+                }
+                for side: Float in [-1, 1] {
+                    let sparkle = costumeSparkle(color: .white, radius: 0.06)
+                    sparkle.position = .init(side * 0.81, 1.43, Float(surfaceDepth(x: CGFloat(side) * 0.81, y: 1.43)) + 0.045)
+                    fullCostume.addChildNode(sparkle)
+                }
+                for arm in arms {
+                    let gesture = SCNNode()
+                    gesture.name = "costume.peace"
+                    for side: Float in [-1, 1] {
+                        let finger = ellipsoid(size: .init(0.029, 0.075, 0.04), position: .init(side * 0.045, -0.27, 0.015), color: fur, outlined: true)
+                        finger.eulerAngles.z = side * -0.25
+                        gesture.addChildNode(finger)
+                    }
+                    arm.addChildNode(gesture)
+                }
+            }
+        }
+
+        private func addCostumeSleeves(color: UIColor) {
+            for arm in arms {
+                let sleeve = ellipsoid(size: .init(0.12, 0.13, 0.13), position: .init(0, -0.035, -0.012), color: color, outlined: true)
+                sleeve.name = "costume.sleeve"
+                arm.addChildNode(sleeve)
+            }
+        }
+
+        private func addCostumeSkirt(width: Float, grass: Bool) {
+            let waist = bodySection(at: 0.55, width: width)
+            let count = grass ? 28 : 20
+            let green = UIColor(red: 0.66, green: 0.84, blue: 0.39, alpha: 1)
+            let skirtColor = character == .chiikawa ? navy : UIColor(red: 0.43, green: 0.46, blue: 0.53, alpha: 1)
+            for index in 0..<count {
+                let a = CGFloat(index) * 2 * .pi / CGFloat(count)
+                let b = CGFloat(index + 1) * 2 * .pi / CGFloat(count)
+                let middle = (a + b) / 2
+                let bottom: CGFloat = grass ? 0.19 + (index.isMultiple(of: 2) ? 0.03 : 0) : 0.19
+                let angles = [a, middle, b]
+                var vertices: [SCNVector3] = []
+                for y in [CGFloat(0.58), bottom] {
+                    let flare: CGFloat = y == 0.58 ? 0.04 : 0.14
+                    for (offset, angle) in angles.enumerated() {
+                        let pleat: CGFloat = offset == 1 ? 0.018 : 0
+                        vertices.append(.init(Float((waist.x + flare + pleat) * sin(angle)), Float(y), Float((waist.z + flare + pleat) * cos(angle))))
+                    }
+                }
+                let mesh = SCNGeometry(sources: [SCNGeometrySource(vertices: vertices)], elements: [SCNGeometryElement(indices: [Int32(0), 3, 1, 1, 3, 4, 1, 4, 2, 2, 4, 5], primitiveType: .triangles)])
+                let color = grass ? green : skirtColor
+                mesh.firstMaterial = material(index.isMultiple(of: 2) ? color : (grass ? UIColor(red: 0.55, green: 0.74, blue: 0.29, alpha: 1) : UIColor(red: 0.32, green: 0.35, blue: 0.43, alpha: 1)))
+                mesh.firstMaterial?.isDoubleSided = true
+                let panel = SCNNode(geometry: mesh)
+                panel.name = grass ? "costume.grass" : "costume.pleat"
+                fullCostume.addChildNode(panel)
+            }
+            let belt = SCNNode(geometry: bodyGeometry(width: width, range: 0.54...0.61, padding: 0.055))
+            belt.geometry?.firstMaterial = material(grass ? UIColor(red: 0.49, green: 0.67, blue: 0.26, alpha: 1) : skirtColor)
+            fullCostume.addChildNode(belt)
+        }
+
+        private func costumeFlower(color: UIColor, radius: Float) -> SCNNode {
+            let flower = SCNNode()
+            flower.name = "costume.flower"
+            for index in 0..<5 {
+                let angle = Float(index) * 2 * .pi / 5
+                let petal = ellipsoid(size: .init(radius * 0.58, radius * 0.80, radius * 0.28), position: .init(sin(angle) * radius * 0.65, cos(angle) * radius * 0.65, 0), color: color)
+                petal.eulerAngles.z = -angle
+                flower.addChildNode(petal)
+            }
+            flower.addChildNode(ellipsoid(size: .init(radius * 0.35, radius * 0.35, radius * 0.28), position: .init(0, 0, radius * 0.22), color: UIColor(red: 1, green: 0.77, blue: 0.32, alpha: 1)))
+            return flower
+        }
+
+        private func costumeHood(color: UIColor) -> SCNNode {
+            var vertices: [SCNVector3] = [], normals: [SCNVector3] = []
+            var indices: [Int32] = []
+            let segments = 80, sides = 12
+            for index in 0...segments {
+                let angle = CGFloat(index) * 2 * .pi / CGFloat(segments)
+                let x = cos(angle) * 0.91, y = 1.56 + sin(angle) * 0.615
+                let z = surfaceDepth(x: x, y: y) + 0.015
+                for side in 0...sides {
+                    let turn = CGFloat(side) * 2 * .pi / CGFloat(sides)
+                    let nx = cos(angle) * cos(turn), ny = sin(angle) * cos(turn), nz = sin(turn)
+                    vertices.append(.init(Float(x + nx * 0.10), Float(y + ny * 0.10), Float(z + nz * 0.10)))
+                    normals.append(.init(Float(nx), Float(ny), Float(nz)))
+                    if index < segments && side < sides {
+                        let a = Int32(index * (sides + 1) + side), b = a + Int32(sides + 1)
+                        indices += [a, b, a + 1, a + 1, b, b + 1]
+                    }
+                }
+            }
+            let mesh = SCNGeometry(sources: [SCNGeometrySource(vertices: vertices), SCNGeometrySource(normals: normals)], elements: [SCNGeometryElement(indices: indices, primitiveType: .triangles)])
+            mesh.firstMaterial = material(color)
+            mesh.firstMaterial?.isDoubleSided = true
+            let hood = SCNNode(geometry: mesh)
+            let shell = bodyGeometry(width: 1, range: 1.02...2.18, padding: 0.025)
+            var shellIndices: [Int32] = []
+            for ring in 0..<96 {
+                let y = 1.02 + 1.16 * (CGFloat(ring) + 0.5) / 96
+                for side in 0..<64 {
+                    let angle = (CGFloat(side) + 0.5) * 2 * .pi / 64
+                    let x = bodySection(at: y).x * sin(angle)
+                    let faceOpening = pow(x / 0.91, 2) + pow((y - 1.56) / 0.615, 2) < 1
+                    if cos(angle) > 0 && faceOpening { continue }
+                    let a = Int32(ring * 65 + side), b = a + 65
+                    shellIndices += [a, a + 1, b, a + 1, b + 1, b]
+                }
+            }
+            let fabric = SCNGeometry(sources: shell.sources, elements: [SCNGeometryElement(indices: shellIndices, primitiveType: .triangles)])
+            fabric.firstMaterial = material(color)
+            hood.addChildNode(SCNNode(geometry: fabric))
+            return hood
+        }
+
+        private func costumeBow(color: UIColor) -> SCNNode {
+            let bow = SCNNode()
+            bow.name = "costume.leopardBow"
+            let brown = UIColor(red: 0.42, green: 0.28, blue: 0.16, alpha: 1)
+            for side: Float in [-1, 1] {
+                let loop = ellipsoid(size: .init(0.21, 0.14, 0.065), position: .init(side * 0.17, 0, 0), color: color, outlined: true)
+                loop.eulerAngles.z = side * 0.18
+                bow.addChildNode(loop)
+                for index in 0..<5 {
+                    let x = side * 0.17 + Float((index % 3) - 1) * 0.085
+                    let y = Float(index / 3) * 0.10 - 0.045
+                    let spot = ellipsoid(size: .init(0.028, 0.020, 0.008), position: .init(x, y, 0.068), color: brown)
+                    spot.eulerAngles.z = Float(index) * 0.8
+                    spot.addChildNode(ellipsoid(size: .init(0.52, 0.46, 0.30), position: .init(0.10, -0.05, 0.95), color: color))
+                    bow.addChildNode(spot)
+                }
+            }
+            bow.addChildNode(ellipsoid(size: .init(0.07, 0.09, 0.075), position: .init(0, 0, 0.015), color: color, outlined: true))
+            return bow
+        }
+
+        private func costumeHeart() -> SCNNode {
+            let path = UIBezierPath()
+            path.move(to: CGPoint(x: 0, y: -0.055))
+            path.addCurve(to: CGPoint(x: 0, y: 0.03), controlPoint1: CGPoint(x: -0.10, y: 0.01), controlPoint2: CGPoint(x: -0.04, y: 0.09))
+            path.addCurve(to: CGPoint(x: 0, y: -0.055), controlPoint1: CGPoint(x: 0.04, y: 0.09), controlPoint2: CGPoint(x: 0.10, y: 0.01))
+            path.close()
+            path.flatness = 0.001
+            let shape = SCNShape(path: path, extrusionDepth: 0.012)
+            shape.firstMaterial = material(UIColor(red: 1, green: 0.27, blue: 0.52, alpha: 1))
+            let heart = SCNNode(geometry: shape)
+            heart.name = "costume.heart"
+            return heart
+        }
+
+        private func costumeSparkle(color: UIColor, radius: CGFloat) -> SCNNode {
+            let path = UIBezierPath()
+            for index in 0..<8 {
+                let angle = CGFloat(index) * .pi / 4
+                let length = index.isMultiple(of: 2) ? radius : radius * 0.27
+                let point = CGPoint(x: cos(angle) * length, y: sin(angle) * length)
+                if index == 0 { path.move(to: point) } else { path.addLine(to: point) }
+            }
+            path.close()
+            let shape = SCNShape(path: path, extrusionDepth: 0.012)
+            shape.chamferRadius = 0.003
+            shape.firstMaterial = flatMaterial(color)
+            return SCNNode(geometry: shape)
+        }
+
+        private func setCostumePose(_ style: CostumeStyle?, resting: Bool, animated: Bool) {
+            costumeHeldProps.isHidden = !resting
+            for arm in arms { arm.childNode(withName: "costume.peace", recursively: false)?.isHidden = !resting }
+            guard resting else { return }
+            if style == .mermaidIsland {
+                holdHands(at: 0.95, apart: 0.40)
+            } else if style == .gyaru {
+                for (index, arm) in arms.enumerated() {
+                    let side: Float = index == 0 ? -1 : 1
+                    transitionPose(arm, position: .init(arm.position.x, 1.10, 0.45), rotation: .init(-0.10, 0, side * 2.12), animated: animated)
+                }
+            }
+        }
+
+        private func setLowEnergyPose(animated: Bool) {
+            rabbit.removeAllActions()
+            rabbit.position = .init(0, -0.015, 0)
+            rabbit.eulerAngles = .init(0.06, 0, 0.035)
+            for (index, ear) in ears.enumerated() {
+                transitionPose(ear, rotation: .init(0.07, 0, index == 0 ? -0.14 : 0.14), animated: animated)
+            }
+            guard animated else { return }
+            rabbit.runAction(.repeatForever(.sequence([
+                eased(.move(to: .init(0, -0.010, 0), duration: 2)),
+                eased(.move(to: .init(0, -0.015, 0), duration: 2))
+            ])), forKey: "nutrition.rest")
+        }
+
+        private func setNutritionEffect(_ mood: NutritionMood, animated: Bool, width: Float) {
+            nutritionEffect.enumerateChildNodes { node, _ in node.removeAllActions() }
+            nutritionEffect.childNodes.forEach { $0.removeFromParentNode() }
+            guard mood == .sparkling else { return }
+            let gold = UIColor(red: 0.91, green: 0.64, blue: 0.12, alpha: 1)
+            for index in 0..<6 {
+                let side: Float = index.isMultiple(of: 2) ? -1 : 1
+                let row = index / 2
+                let sparkle = costumeSparkle(color: gold, radius: row == 1 ? 0.075 : 0.05)
+                sparkle.name = "nutrition.sparkle"
+                sparkle.position = .init(side * (1.06 + Float(row % 2) * 0.10 + max(0, width - 1) * 0.08), 0.78 + Float(row) * 0.62, 0.15)
+                nutritionEffect.addChildNode(sparkle)
+                if animated {
+                    sparkle.runAction(.repeatForever(.sequence([
+                        .wait(duration: Double(index) * 0.12),
+                        eased(.group([.fadeOpacity(to: 0.40, duration: 1.25), .scale(to: 0.72, duration: 1.25)])),
+                        eased(.group([.fadeOpacity(to: 1, duration: 1.25), .scale(to: 1, duration: 1.25)]))
+                    ])), forKey: "nutrition.glow")
+                }
             }
         }
 
@@ -754,6 +1235,162 @@ struct MapUsagiView: UIViewRepresentable {
             }
         }
 
+        private func clearEatingStyle() {
+            props.enumerateChildNodes { node, _ in
+                node.removeAllActions()
+                node.removeAllAnimations()
+            }
+            props.childNodes.forEach { $0.removeFromParentNode() }
+            if let mouth = rabbit.childNode(withName: "character.mouth", recursively: false) {
+                mouth.removeAllActions()
+                mouth.scale = SCNVector3(1, 1, 1)
+            }
+        }
+
+        private func setEatingStyle(_ style: FoodEatingStyle, animated: Bool, width: Float) {
+            setPresentationMotion(.idle, animated: animated, width: width)
+            for (index, ear) in ears.enumerated() {
+                transitionPose(ear, rotation: SCNVector3(0, 0, index == 0 ? -0.055 : 0.055), animated: animated)
+            }
+            let meal = SCNNode()
+            meal.name = "food.eating.\(style.rawValue)"
+            props.addChildNode(meal)
+            if animated, let mouth = rabbit.childNode(withName: "character.mouth", recursively: false) {
+                mouth.runAction(.repeatForever(.sequence([
+                    .wait(duration: 0.3),
+                    .repeat(.sequence([
+                        eased(foodHeight(from: 1, to: 0.65, duration: 0.18)),
+                        eased(foodHeight(from: 0.65, to: 1, duration: 0.18))
+                    ]), count: 3), .wait(duration: 1.72)
+                ])), forKey: "food.chew")
+            }
+            if style == .grass {
+                holdHands(at: 1.10, apart: 0.17)
+                let leaves = SCNNode()
+                leaves.name = "food.leaves"
+                leaves.position = SCNVector3(0, 1.06, 0.77)
+                for side: CGFloat in [-1, 1] {
+                    let path = UIBezierPath()
+                    path.move(to: .zero)
+                    path.addCurve(to: CGPoint(x: side * 0.20, y: 0.29), controlPoint1: CGPoint(x: side * 0.24, y: 0.06), controlPoint2: CGPoint(x: side * 0.25, y: 0.23))
+                    path.addCurve(to: .zero, controlPoint1: CGPoint(x: side * 0.06, y: 0.30), controlPoint2: CGPoint(x: side * 0.02, y: 0.12))
+                    path.close()
+                    path.flatness = 0.001
+                    let shape = SCNShape(path: path, extrusionDepth: 0.018)
+                    shape.firstMaterial = material(UIColor(red: 0.23, green: 0.57, blue: 0.20, alpha: 1))
+                    shape.firstMaterial?.isDoubleSided = true
+                    leaves.addChildNode(SCNNode(geometry: shape))
+                    let vein = UIBezierPath()
+                    vein.move(to: .zero)
+                    vein.addQuadCurve(to: CGPoint(x: side * 0.19, y: 0.27), controlPoint: CGPoint(x: side * 0.08, y: 0.16))
+                    let stem = stroke(vein, width: 0.012, color: UIColor(red: 0.63, green: 0.77, blue: 0.33, alpha: 1))
+                    stem.position.z = 0.02
+                    leaves.addChildNode(stem)
+                }
+                meal.addChildNode(leaves)
+                if animated {
+                    leaves.runAction(.repeatForever(.sequence([
+                        eased(.move(to: SCNVector3(0, 1.13, 0.72), duration: 0.45)),
+                        .repeat(.sequence([eased(.rotateTo(x: 0, y: 0, z: 0.07, duration: 0.18)), eased(.rotateTo(x: 0, y: 0, z: -0.04, duration: 0.18))]), count: 3),
+                        eased(.move(to: SCNVector3(0, 1.02, 0.77), duration: 0.65)),
+                        .wait(duration: 0.92)
+                    ])), forKey: "food.bite")
+                    leaves.runAction(.repeatForever(.sequence([
+                        .wait(duration: 0.45), eased(foodHeight(from: 1, to: 0.60, duration: 1.08)),
+                        .wait(duration: 0.65), eased(foodHeight(from: 0.60, to: 1, duration: 0.30)), .wait(duration: 0.62)
+                    ])), forKey: "food.consume")
+                }
+                return
+            }
+
+            holdHands(at: 0.83, apart: 0.33)
+            arms[1].isHidden = true
+            let red = UIColor(red: 0.86, green: 0.19, blue: 0.10, alpha: 1)
+            let bowl = SCNNode(geometry: SCNCone(topRadius: 0.34, bottomRadius: 0.23, height: 0.23))
+            bowl.name = "food.bowl"
+            bowl.position = SCNVector3(-0.06, 0.72, 0.80)
+            bowl.geometry?.firstMaterial = material(style == .tteokbokki ? red : style == .rice ? UIColor(red: 0.28, green: 0.56, blue: 0.46, alpha: 1) : navy)
+            let rim = SCNNode(geometry: SCNTorus(ringRadius: 0.33, pipeRadius: 0.022))
+            rim.position.y = 0.115
+            rim.geometry?.firstMaterial = material(UIColor(white: 0.96, alpha: 1))
+            bowl.addChildNode(rim)
+            let foodColor = style == .tteokbokki ? red : style == .rice ? UIColor.white : UIColor(red: 1, green: 0.84, blue: 0.42, alpha: 1)
+            bowl.addChildNode(ellipsoid(size: SCNVector3(0.305, style == .rice ? 0.08 : 0.025, 0.305), position: SCNVector3(0, 0.12, 0), color: foodColor))
+            meal.addChildNode(bowl)
+
+            let utensil = SCNNode()
+            utensil.name = "food.utensil"
+            utensil.position = SCNVector3(0.045, 1.25, 0.79)
+            meal.addChildNode(utensil)
+            let bite = SCNNode()
+            bite.name = "food.bite"
+            utensil.addChildNode(bite)
+            if style == .noodles {
+                for index in 0..<5 {
+                    let path = UIBezierPath()
+                    path.move(to: CGPoint(x: -0.21, y: CGFloat(index) * 0.055 - 0.10))
+                    path.addCurve(to: CGPoint(x: 0.21, y: CGFloat(index) * 0.05 - 0.10), controlPoint1: CGPoint(x: -0.10, y: CGFloat(index) * 0.05 - 0.20), controlPoint2: CGPoint(x: 0.08, y: CGFloat(index) * 0.05 + 0.03))
+                    let curl = stroke(path, width: 0.027, color: foodColor)
+                    curl.eulerAngles.x = -.pi / 2
+                    curl.position.y = 0.15
+                    bowl.addChildNode(curl)
+                }
+                bite.name = "food.noodles"
+                for index in 0..<4 {
+                    let path = UIBezierPath()
+                    let x = CGFloat(index) * 0.035 - 0.045
+                    path.move(to: CGPoint(x: x, y: 0))
+                    path.addCurve(to: CGPoint(x: x - 0.035, y: -0.36), controlPoint1: CGPoint(x: x + 0.045, y: -0.12), controlPoint2: CGPoint(x: x - 0.06, y: -0.24))
+                    bite.addChildNode(stroke(path, width: 0.018, color: foodColor))
+                }
+                for offset: CGFloat in [-0.025, 0.025] {
+                    let path = UIBezierPath()
+                    path.move(to: CGPoint(x: -0.08, y: offset))
+                    path.addLine(to: CGPoint(x: 0.38, y: -0.10 + offset))
+                    utensil.addChildNode(stroke(path, width: 0.018, color: UIColor(red: 0.55, green: 0.31, blue: 0.12, alpha: 1)))
+                }
+            } else {
+                for index in 0..<9 {
+                    let piece = ellipsoid(size: style == .rice ? SCNVector3(0.028, 0.019, 0.055) : SCNVector3(0.055, 0.035, 0.12), position: SCNVector3(Float(index % 3 - 1) * 0.15, 0.16 + Float(index % 2) * 0.012, Float(index / 3 - 1) * 0.13), color: style == .rice ? .white : UIColor(red: 1, green: 0.39, blue: 0.18, alpha: 1))
+                    piece.eulerAngles.y = Float(index) * 0.6
+                    bowl.addChildNode(piece)
+                }
+                let handle = UIBezierPath()
+                handle.move(to: CGPoint(x: 0.03, y: -0.025))
+                handle.addLine(to: CGPoint(x: 0.37, y: -0.14))
+                utensil.addChildNode(stroke(handle, width: 0.022, color: UIColor(white: 0.65, alpha: 1)))
+                if style == .rice {
+                    utensil.addChildNode(ellipsoid(size: SCNVector3(0.105, 0.018, 0.065), position: SCNVector3(-0.015, -0.027, 0), color: UIColor(white: 0.72, alpha: 1)))
+                    bite.addChildNode(ellipsoid(size: SCNVector3(0.085, 0.04, 0.055), position: .init(0, 0.012, 0), color: .white))
+                } else {
+                    let riceCake = ellipsoid(size: SCNVector3(0.12, 0.05, 0.05), position: .init(0, 0.015, 0), color: UIColor(red: 1, green: 0.34, blue: 0.12, alpha: 1), outlined: true)
+                    riceCake.eulerAngles.z = -0.20
+                    bite.addChildNode(riceCake)
+                }
+            }
+            utensil.addChildNode(ellipsoid(size: SCNVector3(0.075, 0.085, 0.075), position: SCNVector3(0.30, -0.12, 0.025), color: fur, outlined: true))
+            if animated {
+                utensil.runAction(.repeatForever(.sequence([
+                    .wait(duration: 0.90), eased(.move(to: SCNVector3(0.05, 0.91, 0.87), duration: 0.65)),
+                    .wait(duration: 0.45), eased(.move(to: SCNVector3(0.045, 1.25, 0.79), duration: 0.75)), .wait(duration: 0.35)
+                ])), forKey: "food.scoop")
+                let refill: [SCNAction] = style == .noodles ? [
+                    .fadeIn(duration: 0.20), .wait(duration: 0.20),
+                    eased(foodHeight(from: 0.12, to: 1, duration: 0.75)), .wait(duration: 0.35)
+                ] : [.scale(to: 1, duration: 0), .fadeIn(duration: 0.20), .wait(duration: 1.30)]
+                bite.runAction(.repeatForever(.sequence([
+                    .wait(duration: 0.15), eased(foodHeight(from: 1, to: style == .noodles ? 0.12 : 0.35, duration: 0.65)),
+                    .fadeOut(duration: 0.10), .wait(duration: 0.70)
+                ] + refill)), forKey: style == .noodles ? "food.slurp" : "food.consume")
+            }
+        }
+
+        private func foodHeight(from: Float, to: Float, duration: TimeInterval) -> SCNAction {
+            .customAction(duration: duration) { node, elapsed in
+                node.scale.y = from + (to - from) * Float(min(1, Double(elapsed) / duration))
+            }
+        }
+
         private func setWater(level: Double, width: Float, animated: Bool) {
             waterWave.removeAllAnimations()
             waterWave.morpher = nil
@@ -841,7 +1478,8 @@ struct MapUsagiView: UIViewRepresentable {
 
         private func frameCharacter() {
             let isUsagi = character == .usagi
-            camera.camera?.orthographicScale = isUsagi ? 1.85 : 1.65
+            // Keep raised, stronger arms inside portrait snapshots for the compact characters.
+            camera.camera?.orthographicScale = isUsagi ? 1.85 : 1.65 + Double(muscleLevel) * 0.20
             camera.position = SCNVector3(0, isUsagi ? 2.7 : 2.45, 7.5)
             camera.look(at: SCNVector3(0, isUsagi ? 1.53 : 1.26, 0))
         }
@@ -927,11 +1565,28 @@ struct MapUsagiView: UIViewRepresentable {
                 let m2 = (p3 - p1) / (after.y - a.y) * (b.y - a.y)
                 return max(0.001, (2 * t * t * t - 3 * t * t + 1) * p1 + (t * t * t - 2 * t * t + t) * m1 + (-2 * t * t * t + 3 * t * t) * p2 + (t * t * t - t * t) * m2)
             }
-            let blend = min(1, max(0, (y - 0.60) / 0.55))
+            var radiusX = interpolate(before.x, a.x, b.x, after.x)
+            var radiusZ = interpolate(before.z, a.z, b.z, after.z)
+            if y < 0.30 {
+                // Interpolating squared radii closes the belly with a round pole instead of a cone.
+                let u = min(1, max(0, (y - 0.10) / 0.20))
+                func rounded(_ radius: CGFloat, slope: CGFloat) -> CGFloat {
+                    let squared = radius * radius
+                    return max(0.001, sqrt(max(0, (-2 * u * u * u + 3 * u * u) * squared
+                        + (u * u * u - 2 * u * u + u) * 2 * squared
+                        + (u * u * u - u * u) * 2 * radius * slope * 0.20)))
+                }
+                let edge = bodyProfile[2]
+                radiusX = rounded(edge.x, slope: (bodyProfile[3].x - bodyProfile[1].x) / (bodyProfile[3].y - bodyProfile[1].y))
+                radiusZ = rounded(edge.z, slope: (bodyProfile[3].z - bodyProfile[1].z) / (bodyProfile[3].y - bodyProfile[1].y))
+            }
+            let blend = min(1, max(0, (y - 0.35) / 0.80))
             let lowerBodyWeight = 1 - blend * blend * (3 - 2 * blend)
+            let strengthBlend = min(1, max(0, (y - 0.35) / 0.75))
+            let strength = muscleLevel * pow(sin(.pi * strengthBlend), 2)
             let head = headFactor(at: y)
-            return (interpolate(before.x, a.x, b.x, after.x) * 1.055 * (1 + CGFloat(width - 1) * lowerBodyWeight) * head,
-                    interpolate(before.z, a.z, b.z, after.z) * head)
+            return (radiusX * 1.055 * (1 + CGFloat(width - 1) * lowerBodyWeight + strength * 0.12) * head,
+                    radiusZ * (1 + strength * 0.16) * head)
         }
 
         private func headFactor(at y: CGFloat) -> CGFloat {

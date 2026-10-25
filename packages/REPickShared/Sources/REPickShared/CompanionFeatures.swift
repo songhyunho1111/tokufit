@@ -138,11 +138,13 @@ public struct WorkoutSession: Codable, Equatable, Identifiable, Sendable {
     public let id: UUID
     public let mode: WorkoutMode
     public let startedAt: Date
+    public let activity: WorkoutActivity?
 
-    public init(id: UUID = UUID(), mode: WorkoutMode, startedAt: Date = Date()) {
+    public init(id: UUID = UUID(), mode: WorkoutMode, startedAt: Date = Date(), activity: WorkoutActivity? = nil) {
         self.id = id
         self.mode = mode
         self.startedAt = Date(timeIntervalSince1970: floor(startedAt.timeIntervalSince1970))
+        self.activity = activity
     }
 
     public func validate() throws {
@@ -162,10 +164,11 @@ public struct WorkoutRecord: Codable, Equatable, Identifiable, Sendable {
     public let distanceMeters: Double?
     public let calories: Int?
     public let activity: WorkoutActivity?
+    public let calorieSource: WorkoutCalorieSource?
 
     public init(id: UUID, mode: WorkoutMode, startedAt: Date, endedAt: Date, durationMinutes: Int,
                 repetitions: Int? = nil, distanceMeters: Double? = nil, calories: Int? = nil,
-                activity: WorkoutActivity? = nil) throws {
+                activity: WorkoutActivity? = nil, calorieSource: WorkoutCalorieSource? = nil) throws {
         self.id = id
         self.mode = mode
         self.startedAt = Date(timeIntervalSince1970: floor(startedAt.timeIntervalSince1970))
@@ -175,6 +178,7 @@ public struct WorkoutRecord: Codable, Equatable, Identifiable, Sendable {
         self.distanceMeters = distanceMeters
         self.calories = calories
         self.activity = activity
+        self.calorieSource = calorieSource
         try validate()
     }
 
@@ -187,5 +191,9 @@ public struct WorkoutRecord: Codable, Equatable, Identifiable, Sendable {
             throw DomainError.invalidWorkout
         }
         if let calories, !(0...10_000).contains(calories) { throw DomainError.invalidWorkout }
+        guard calorieSource == nil || calories != nil,
+              calorieSource != .estimated || (activity != nil && activity != .other && calories != 0) else {
+            throw DomainError.invalidWorkout
+        }
     }
 }

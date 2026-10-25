@@ -12,6 +12,7 @@ struct MealView: View {
     @State private var carbohydrates = ""
     @State private var protein = ""
     @State private var fat = ""
+    @State private var mealKind = MealKind.breakfast
     @State private var validationMessage: String?
     @State private var estimateTask: Task<Void, Never>?
     @FocusState private var focusedField: String?
@@ -19,6 +20,15 @@ struct MealView: View {
     var body: some View {
         NavigationStack {
             Form {
+                Section("식사 종류") {
+                    Picker("식사 종류", selection: $mealKind) {
+                        ForEach(MealKind.allCases) { kind in Text(kind.name).tag(kind) }
+                    }
+                    .pickerStyle(.segmented)
+                    .accessibilityIdentifier("meal.kind")
+                }
+                .listRowBackground(Color.repickSurface)
+
                 Section {
                     TextField("예: 엽떡 1인분, 삶은 달걀 2개", text: $food, axis: .vertical)
                         .focused($focusedField, equals: "food")
@@ -75,14 +85,20 @@ struct MealView: View {
                             } label: {
                                 VStack(alignment: .leading, spacing: 4) {
                                     Text(meal.name)
+                                    if let kind = meal.kind {
+                                        Text(kind.name).font(AppFont.font(.caption, weight: .semibold))
+                                            .accessibilityIdentifier("meal.recordKind.\(meal.id)")
+                                    }
                                     if meal.source == .onDeviceAI {
-                                        Text("칼로리 AI 추정").font(.caption).foregroundStyle(Color.repickSecondaryText)
+                                        Text("칼로리 AI 추정").font(AppFont.font(.caption)).foregroundStyle(Color.repickSecondaryText)
                                     } else if meal.source == .photoAI {
-                                        Text("사진 AI 추정 · 직접 확인").font(.caption).foregroundStyle(Color.repickSecondaryText)
+                                        Text("사진 AI 추정 · 직접 확인").font(AppFont.font(.caption)).foregroundStyle(Color.repickSecondaryText)
+                                    } else {
+                                        Text("직접 입력").font(AppFont.font(.caption)).foregroundStyle(Color.repickSecondaryText)
                                     }
                                     if let nutrients = meal.nutrients {
                                         Text("탄수화물 \(nutrients.carbohydratesG.formatted())g · 단백질 \(nutrients.proteinG.formatted())g · 지방 \(nutrients.fatG.formatted())g")
-                                            .font(.caption).foregroundStyle(Color.repickSecondaryText)
+                                            .font(AppFont.font(.caption)).foregroundStyle(Color.repickSecondaryText)
                                     }
                                 }
                             }
@@ -96,7 +112,7 @@ struct MealView: View {
             .safeAreaInset(edge: .bottom) {
                 if let validationMessage {
                     Text(validationMessage)
-                        .font(.footnote).foregroundStyle(Color.repickDanger)
+                        .font(AppFont.font(.footnote)).foregroundStyle(Color.repickDanger)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(Design.pagePadding)
                         .background(Color.repickSurface)
@@ -120,7 +136,7 @@ struct MealView: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("추가", action: save)
-                        .fontWeight(.semibold)
+                        .font(AppFont.font(.body, weight: .semibold))
                         .disabled(store.isSaving || estimator.isLoading)
                         .accessibilityLabel("음식 기록 추가")
                         .accessibilityIdentifier("save.meal")
@@ -155,7 +171,7 @@ struct MealView: View {
     private var estimateInformation: some View {
         if let result = estimator.result {
             VStack(alignment: .leading, spacing: 4) {
-                Text("AI 추정 결과: \(result.calories) kcal").fontWeight(.medium)
+                Text("AI 추정 결과: \(result.calories) kcal").font(AppFont.font(.body, weight: .medium))
                 Text(result.explanation)
                 Text("영양정보를 확인하고 수정할 수 있습니다.")
             }
@@ -192,9 +208,10 @@ struct MealView: View {
         let source: MealSource = estimator.result?.calories == amount ? .onDeviceAI : .manual
         do {
             let nutrients = try MealNutrientInput.parse(carbohydrates: carbohydrates, protein: protein, fat: fat)
-            _ = try MealEntry(name: name, calories: amount, source: source, recordedAt: Date(), nutrients: nutrients)
+            _ = try MealEntry(name: name, calories: amount, source: source, recordedAt: Date(), nutrients: nutrients, kind: mealKind)
+            let kind = mealKind
             Task {
-                if await store.update({ try $0.addMeal(name: name, calories: amount, source: source, nutrients: nutrients) }) {
+                if await store.update({ try $0.addMeal(name: name, calories: amount, source: source, nutrients: nutrients, kind: kind) }) {
                     store.motion = .eating
                     dismiss()
                 } else { validationMessage = store.errorMessage }

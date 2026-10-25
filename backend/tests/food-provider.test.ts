@@ -14,18 +14,21 @@ const configuration = {
 const image: FoodPhotoImage = { mimeType: "image/jpeg", base64: "dGVzdA==" };
 const recognized = {
   status: "recognized",
+  alternatives: [],
   food: {
     name: "바나나",
     portion: "약 중간 크기 한 개",
     calories: 105,
     nutrients: { carbohydratesG: 27, proteinG: 1.3, fatG: 0.4 },
     notes: "실제 크기와 껍질을 뺀 양에 따라 달라질 수 있어.",
+    eatingStyle: "grass",
   },
   message: "사진으로 추정한 값이야. 음식과 양이 맞는지 확인해 줘.",
 };
 const unrecognized = {
   status: "unrecognized",
   food: null,
+  alternatives: [],
   message:
     "음식을 알아보기 어려워. 음식이 선명하게 보이는 사진으로 다시 찍어 줘.",
 };
@@ -67,7 +70,34 @@ describe("food photo provider", () => {
     const payload: unknown = JSON.parse(String(call[1]?.body));
     expect(payload).toMatchObject({
       model: "gpt-5.6-luna",
-      response_format: { type: "json_schema", json_schema: { strict: true } },
+      response_format: {
+        type: "json_schema",
+        json_schema: {
+          strict: true,
+          schema: {
+            properties: {
+              food: {
+                anyOf: [
+                  {
+                    required: expect.arrayContaining(["eatingStyle"]),
+                    properties: {
+                      eatingStyle: {
+                        anyOf: [
+                          { const: "grass" },
+                          { const: "noodles" },
+                          { const: "rice" },
+                          { const: "tteokbokki" },
+                        ],
+                      },
+                    },
+                  },
+                  { type: "null" },
+                ],
+              },
+            },
+          },
+        },
+      },
       messages: [
         { role: "system" },
         {
@@ -91,7 +121,42 @@ describe("food photo provider", () => {
     expect(body).toContain("never fill an unknown nutrient with zero");
     expect(body).toContain("Photos cannot establish exact weight");
     expect(body).toContain("Do not claim anything has been saved");
+    expect(body).toContain("not a nutritional or health judgment");
+    expect(body).toContain("never reject recognizable food just because");
   });
+
+  it.each(["grass", "noodles", "rice", "tteokbokki"])(
+    "preserves the AI-selected %s eating motion in the same request",
+    async (eatingStyle) => {
+      const content = {
+        ...recognized,
+        food: { ...recognized.food, eatingStyle },
+      };
+      const transport = vi
+        .fn<typeof fetch>()
+        .mockImplementation(async () => completion(content));
+      expect(
+        await createFoodPhotoAnalyzer(configuration, transport)(image),
+      ).toEqual({ model: configuration.model, ...content });
+      expect(transport).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it.each([undefined, null, "soup", "", 1])(
+    "rejects missing or invalid eating motion %s without a fallback",
+    async (eatingStyle) => {
+      const transport = vi.fn<typeof fetch>().mockImplementation(async () =>
+        completion({
+          ...recognized,
+          food: { ...recognized.food, eatingStyle },
+        }),
+      );
+      await expect(
+        createFoodPhotoAnalyzer(configuration, transport)(image),
+      ).rejects.toMatchObject({ code: "FOOD_LLM_INVALID_RESPONSE" });
+      expect(transport).toHaveBeenCalledTimes(1);
+    },
+  );
 
   it("preserves the unrecognized branch without inventing a meal", async () => {
     const transport = vi

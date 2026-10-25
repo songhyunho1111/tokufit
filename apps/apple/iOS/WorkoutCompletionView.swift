@@ -20,8 +20,17 @@ struct WorkoutCompletionView: View {
     init(session: WorkoutSession, endedAt: Date) {
         self.session = session
         self.endedAt = endedAt
-        let elapsed = min(1_440, max(1, Int(ceil(max(0, endedAt.timeIntervalSince(session.startedAt)) / 60))))
+        let elapsed = max(1, Int(ceil(max(0, endedAt.timeIntervalSince(session.startedAt)) / 60)))
         _minutes = State(initialValue: String(elapsed))
+        _activity = State(initialValue: session.activity)
+    }
+
+    private var estimatedCalories: Int? {
+        WorkoutCompletionInput.estimateCalories(minutes: minutes, activity: activity, weightKG: store.state.profile?.weightKG)
+    }
+
+    private var hasManualCalories: Bool {
+        !calories.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     var body: some View {
@@ -30,7 +39,9 @@ struct WorkoutCompletionView: View {
                 Section {
                     LabeledContent("운동", value: session.mode.name)
                     Picker("운동 종류", selection: $activity) {
-                        Text("선택 안 함").tag(WorkoutActivity?.none)
+                        if session.activity == nil {
+                            Text("선택 안 함").tag(WorkoutActivity?.none)
+                        }
                         ForEach(WorkoutActivity.allCases) { activity in
                             Text(activity.name).tag(Optional(activity))
                         }
@@ -45,9 +56,29 @@ struct WorkoutCompletionView: View {
                 Section {
                     amountField("횟수", text: $repetitions, unit: "회", id: "exercise.repetitions")
                     amountField("거리", text: $distanceKM, unit: "km", id: "exercise.distance", decimal: true)
-                    amountField("소모 칼로리", text: $calories, unit: "kcal", id: "exercise.calories")
                 } header: { Text("운동량 · 선택") } footer: {
-                    Text("직접 확인한 값만 입력하세요. 거리와 칼로리는 자동 측정되지 않습니다.")
+                    Text("직접 확인한 값만 입력하세요. 횟수와 거리는 자동 측정되지 않습니다.")
+                }
+                .listRowBackground(Color.repickSurface)
+                Section {
+                    if hasManualCalories {
+                        Label("직접 입력한 칼로리를 저장해요", systemImage: "pencil")
+                            .accessibilityIdentifier("exercise.calorieSource.manual")
+                    } else if let estimatedCalories {
+                        LabeledContent("소모 칼로리 · 추정", value: "약 \(estimatedCalories) kcal")
+                            .accessibilityIdentifier("exercise.estimatedCalories")
+                    } else {
+                        Text("추정값 없음 · 칼로리 없이 기록해요")
+                            .foregroundStyle(Color.repickSecondaryText)
+                            .accessibilityIdentifier("exercise.estimatedCalories.unavailable")
+                    }
+                    amountField("칼로리 직접 입력", text: $calories, unit: "kcal", id: "exercise.calories")
+                    if hasManualCalories {
+                        Button(estimatedCalories == nil ? "직접 입력 지우기" : "추정치 사용") { calories = "" }
+                            .accessibilityIdentifier("exercise.useEstimate")
+                    }
+                } header: { Text("소모 칼로리") } footer: {
+                    Text("운동 종류·시간·체중을 바탕으로 안정 시 소모량을 뺀 활동 칼로리를 추정해요. 측정값이 아니며 실제 강도에 따라 달라요. 직접 입력하면 그 값을 우선 저장하고, 기타 운동은 추정하지 않아요.")
                 }
                 .listRowBackground(Color.repickSurface)
                 Section {
@@ -56,12 +87,13 @@ struct WorkoutCompletionView: View {
                 }
                 .listRowBackground(Color.repickSurface)
             }
+            .font(AppFont.font(.body))
             .disabled(isSaving || store.isSaving)
             .scrollDismissesKeyboard(.interactively)
             .safeAreaInset(edge: .bottom) {
                 if let errorMessage {
                     Text(errorMessage)
-                        .font(.footnote).foregroundStyle(Color.repickDanger)
+                        .font(AppFont.font(.footnote)).foregroundStyle(Color.repickDanger)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(Design.pagePadding)
                         .background(Color.repickSurface)
@@ -76,7 +108,7 @@ struct WorkoutCompletionView: View {
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button(isSaving ? "저장 중…" : "저장") { Task { await save() } }
-                        .fontWeight(.semibold)
+                        .font(AppFont.font(.body, weight: .semibold))
                         .disabled(isSaving || store.isSaving)
                         .accessibilityLabel("운동 기록 저장")
                         .accessibilityIdentifier("exercise.save")
@@ -167,6 +199,12 @@ struct WorkoutCompletionInput {
             guard let kilometers = Double(normalized), kilometers.isFinite, (0...200).contains(kilometers) else { throw InputError.invalid }
             distanceMeters = kilometers * 1_000
         }
+    }
+
+    static func estimateCalories(minutes: String, activity: WorkoutActivity?, weightKG: Double?) -> Int? {
+        guard let activity, let weightKG,
+              let minutes = Int(minutes.trimmingCharacters(in: .whitespacesAndNewlines)) else { return nil }
+        return ExerciseEnergy.estimateCalories(activity: activity, minutes: minutes, weightKG: weightKG)
     }
 
     private static func optionalInteger(_ text: String, range: ClosedRange<Int>) throws -> Int? {

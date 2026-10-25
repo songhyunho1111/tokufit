@@ -31,7 +31,7 @@ struct ShareCardView: View {
                                 } else {
                                     Text("체중 변화량이 포함됩니다. 키·현재 몸무게·성별·위치는 포함하지 않습니다.")
                                 }
-                            }.font(.footnote).foregroundStyle(Color.repickSecondaryText)
+                            }.font(AppFont.font(.footnote)).foregroundStyle(Color.repickSecondaryText)
                         } else if let errorMessage {
                             ContentUnavailableView {
                                 Label("이미지를 만들지 못했어요", systemImage: "photo.badge.exclamationmark")
@@ -83,7 +83,7 @@ struct ShareCardView: View {
                 Task { await shareToInstagram(export) }
             } label: {
                 Label(isOpeningInstagram ? "Instagram 여는 중" : "Instagram 스토리", systemImage: "camera")
-                    .font(.subheadline.weight(.medium))
+                    .font(AppFont.font(.subheadline, weight: .medium))
                     .frame(maxWidth: .infinity, minHeight: 44)
             }
             .buttonStyle(.plain)
@@ -93,11 +93,11 @@ struct ShareCardView: View {
             }
             if instagram.availability == .setupRequired {
                 Text("스토리 공유 준비 중")
-                    .font(.caption).foregroundStyle(Color.repickSecondaryText)
+                    .font(AppFont.font(.caption)).foregroundStyle(Color.repickSecondaryText)
                     .accessibilityIdentifier("share.instagramUnavailable")
             } else if instagram.availability == .appUnavailable {
                 Text("Instagram 설치 후 사용할 수 있어요.")
-                    .font(.caption).foregroundStyle(Color.repickSecondaryText)
+                    .font(AppFont.font(.caption)).foregroundStyle(Color.repickSecondaryText)
             }
         }
         .padding(.horizontal, Design.pagePadding)
@@ -198,19 +198,19 @@ private struct ActivityCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
-                Text("RE:PICK").font(.system(size: 17, weight: .bold, design: .rounded))
+                Text("RE:PICK").font(AppFont.fixed(size: 17, weight: .bold))
                 Spacer()
                 Text(snapshot.daily.day.replacingOccurrences(of: "-", with: "."))
-                    .font(.system(size: 11, weight: .medium)).foregroundStyle(muted)
+                    .font(AppFont.fixed(size: 11, weight: .medium)).foregroundStyle(muted)
             }
             Spacer().frame(height: 24)
             VStack(alignment: .leading, spacing: 6) {
                 Text(snapshot.preferences.name)
-                    .font(.system(size: 30, weight: .bold, design: .rounded))
+                    .font(AppFont.fixed(size: 30, weight: .bold))
                     .lineLimit(2).minimumScaleFactor(0.6)
                     .frame(height: 66, alignment: .bottomLeading)
                 Text("\(snapshot.preferences.character.name) · \(snapshot.equippedOutfit.name)")
-                    .font(.system(size: 12, weight: .medium)).foregroundStyle(muted)
+                    .font(AppFont.fixed(size: 12, weight: .medium)).foregroundStyle(muted)
                     .lineLimit(1).minimumScaleFactor(0.7)
             }
             Image(uiImage: character).resizable().scaledToFit()
@@ -222,9 +222,9 @@ private struct ActivityCard: View {
                     if snapshot.weightChangeKG != nil {
                         Text("기준 기록 대비").foregroundStyle(muted)
                     }
-                }.font(.system(size: 12, weight: .medium))
+                }.font(AppFont.fixed(size: 12, weight: .medium))
                 Text(ShareCardText.weightChange(snapshot.weightChangeKG))
-                    .font(.system(size: snapshot.weightChangeKG == nil ? 27 : 40, weight: .bold, design: .rounded))
+                    .font(AppFont.fixed(size: snapshot.weightChangeKG == nil ? 27 : 40, weight: .bold))
                     .monospacedDigit().foregroundStyle(accent)
                     .lineLimit(1).minimumScaleFactor(0.7)
             }
@@ -244,8 +244,8 @@ private struct ActivityCard: View {
 
     private func metric(_ title: LocalizedStringKey, value: String) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(title).font(.system(size: 11, weight: .medium)).foregroundStyle(muted)
-            Text(value).font(.system(size: 17, weight: .semibold, design: .rounded)).monospacedDigit()
+            Text(title).font(AppFont.fixed(size: 11, weight: .medium)).foregroundStyle(muted)
+            Text(value).font(AppFont.fixed(size: 17, weight: .semibold)).monospacedDigit()
                 .lineLimit(1).minimumScaleFactor(0.65)
         }.frame(maxWidth: .infinity, alignment: .leading)
     }

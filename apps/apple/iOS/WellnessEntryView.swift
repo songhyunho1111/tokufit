@@ -68,7 +68,7 @@ struct WellnessEntryView: View {
             .safeAreaInset(edge: .bottom) {
                 if let errorMessage {
                     Text(errorMessage)
-                        .font(.footnote).foregroundStyle(Color.repickDanger)
+                        .font(AppFont.font(.footnote)).foregroundStyle(Color.repickDanger)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(Design.pagePadding)
                         .background(Color.repickSurface)

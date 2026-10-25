@@ -43,7 +43,7 @@ struct HealthReportsView: View {
                     localRecords(request)
                 }
                 if let message = inputError ?? model.errorMessage {
-                    Text(message).font(.subheadline).foregroundStyle(Color.repickDanger)
+                    Text(message).font(AppFont.font(.subheadline)).foregroundStyle(Color.repickDanger)
                         .accessibilityIdentifier("reports.status")
                 }
                 if model.isGenerating {
@@ -53,7 +53,7 @@ struct HealthReportsView: View {
                         Spacer(minLength: 8)
                         Button("취소") { generation?.cancel() }
                     }
-                    .font(.subheadline)
+                    .font(AppFont.font(.subheadline))
                     .accessibilityIdentifier("reports.loading")
                 } else {
                     Button(selectedReport == nil ? "AI 리포트 만들기" : "기록 다시 분석") {
@@ -65,7 +65,7 @@ struct HealthReportsView: View {
                     .disabled(!model.isConfigured || request?.hasRecords != true)
                     .accessibilityIdentifier("reports.generate")
                     Text("선택한 기간의 식사·운동·수면·컨디션 기록만 분석 서버로 전송합니다.")
-                        .font(.footnote).foregroundStyle(Color.repickSecondaryText)
+                        .font(AppFont.font(.footnote)).foregroundStyle(Color.repickSecondaryText)
                 }
                 if let report = selectedReport {
                     ReportContent(report: report, cached: !model.freshIDs.contains(report.id))
@@ -116,11 +116,11 @@ struct HealthReportsView: View {
                     .disabled(model.isGenerating || previousDate == nil)
                 VStack(spacing: 4) {
                     Text(window.map { ReportText.range($0) } ?? "기간 확인 중")
-                        .font(.headline).multilineTextAlignment(.center)
+                        .font(AppFont.font(.headline)).multilineTextAlignment(.center)
                         .accessibilityIdentifier("reports.range")
                     if let window, window.elapsedDays < window.dayCount {
                         Text("\(window.elapsedDays)일째 · 진행 중인 기간")
-                            .font(.caption).foregroundStyle(Color.repickSecondaryText)
+                            .font(AppFont.font(.caption)).foregroundStyle(Color.repickSecondaryText)
                     }
                 }
                 .frame(maxWidth: .infinity)
@@ -165,11 +165,11 @@ struct HealthReportsView: View {
 
     private func localRecords(_ request: HealthReportRequest) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("보관된 기록 기준").font(.headline)
+            Text("보관된 기록 기준").font(AppFont.font(.headline))
             Text("음식 \(request.data.meals.count)건 · 운동 \(request.data.workouts.count)회 · 수면·컨디션 \(request.data.wellness.count)일")
-                .font(.subheadline)
+                .font(AppFont.font(.subheadline))
             Text("보관 기간을 지난 기록과 삭제된 기록은 포함되지 않아요. 기록이 없는 날의 실제 식사·운동량은 알 수 없습니다.")
-                .font(.footnote).foregroundStyle(Color.repickSecondaryText)
+                .font(AppFont.font(.footnote)).foregroundStyle(Color.repickSecondaryText)
         }
     }
 }
@@ -295,7 +295,7 @@ private struct ReportHistoryView: View {
         NavigationStack {
             List {
                 if let error = model.errorMessage {
-                    Text(error).font(.footnote).foregroundStyle(Color.repickDanger)
+                    Text(error).font(AppFont.font(.footnote)).foregroundStyle(Color.repickDanger)
                 }
                 if model.reports.isEmpty {
                     ContentUnavailableView("아직 보관된 리포트가 없어요", systemImage: "doc.text")
@@ -308,12 +308,12 @@ private struct ReportHistoryView: View {
                             .navigationBarTitleDisplayMode(.inline)
                     } label: {
                         VStack(alignment: .leading, spacing: 5) {
-                            Text("\(report.period.name) · \(ReportText.range(report.metrics.window))").font(.headline)
+                            Text("\(report.period.name) · \(ReportText.range(report.metrics.window))").font(AppFont.font(.headline))
                             Text(report.createdAt.formatted(date: .abbreviated, time: .shortened))
-                                .font(.caption).foregroundStyle(Color.repickSecondaryText)
+                                .font(AppFont.font(.caption)).foregroundStyle(Color.repickSecondaryText)
                             if report.status != .completed {
                                 Text(report.status == .processing ? "작성 중" : "작성하지 못한 리포트")
-                                    .font(.caption).foregroundStyle(Color.repickSecondaryText)
+                                    .font(AppFont.font(.caption)).foregroundStyle(Color.repickSecondaryText)
                             }
                         }
                     }
@@ -354,10 +354,10 @@ private struct ReportContent: View {
     var body: some View {
         VStack(alignment: .leading, spacing: Design.sectionSpacing) {
             VStack(alignment: .leading, spacing: 4) {
-                Text(cached ? "보관된 리포트" : "분석 결과").font(.headline)
-                Text(ReportText.range(report.metrics.window)).font(.subheadline)
+                Text(cached ? "보관된 리포트" : "분석 결과").font(AppFont.font(.headline))
+                Text(ReportText.range(report.metrics.window)).font(AppFont.font(.subheadline))
                 Text("작성 \(report.createdAt.formatted(date: .abbreviated, time: .shortened))")
-                    .font(.caption).foregroundStyle(Color.repickSecondaryText)
+                    .font(AppFont.font(.caption)).foregroundStyle(Color.repickSecondaryText)
             }
             metrics
             if report.status == .completed, let evaluation = report.evaluation {
@@ -366,7 +366,7 @@ private struct ReportContent: View {
                         highlightedTitle(Text("우사기의 \(report.period.name) 평가"))
                         ReportUsagiView(reaction: report.reaction)
                         Text(evaluation)
-                            .font(.body).lineSpacing(6)
+                            .font(AppFont.font(.body)).lineSpacing(6)
                             .fixedSize(horizontal: false, vertical: true)
                             .accessibilityIdentifier("reports.evaluation")
                     }
@@ -383,17 +383,17 @@ private struct ReportContent: View {
                             VStack(alignment: .leading, spacing: 12) {
                                 HStack(alignment: .top, spacing: 10) {
                                     Text("\(index + 1)")
-                                        .font(.subheadline.weight(.bold)).monospacedDigit()
+                                        .font(AppFont.font(.subheadline, weight: .bold)).monospacedDigit()
                                         .padding(.horizontal, 10).padding(.vertical, 6)
                                         .foregroundStyle(Color.repickInk)
                                         .background(Color.repickRewardSurface, in: RoundedRectangle(cornerRadius: 10))
                                     Text(item.title)
-                                        .font(.headline).foregroundStyle(Color.repickGreen)
+                                        .font(AppFont.font(.headline)).foregroundStyle(Color.repickGreen)
                                         .fixedSize(horizontal: false, vertical: true)
                                         .padding(.vertical, 4)
                                 }
                                 Text(item.detail)
-                                    .font(.body).lineSpacing(5)
+                                    .font(AppFont.font(.body)).lineSpacing(5)
                                     .fixedSize(horizontal: false, vertical: true)
                             }
                         }
@@ -406,7 +406,7 @@ private struct ReportContent: View {
                     .foregroundStyle(Color.repickSecondaryText)
             }
             Text("보관된 기록을 참고한 AI 생활 제안입니다. 기록하지 않은 날과 보관 기간이 지난 기록은 평가할 수 없어요.")
-                .font(.footnote).foregroundStyle(Color.repickSecondaryText)
+                .font(AppFont.font(.footnote)).foregroundStyle(Color.repickSecondaryText)
         }
         .foregroundStyle(Color.repickInk)
         .frame(maxWidth: Design.contentWidth, alignment: .leading)
@@ -465,21 +465,21 @@ private struct ReportContent: View {
                     Image(systemName: icon).foregroundStyle(Color.repickGreen)
                     highlightedTitle(Text(title))
                 }
-                content().font(.body)
+                content().font(AppFont.font(.body))
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 
     private func highlightedTitle(_ title: Text) -> some View {
-        title.font(.headline).foregroundStyle(Color.repickGreen)
+        title.font(AppFont.font(.headline)).foregroundStyle(Color.repickGreen)
             .fixedSize(horizontal: false, vertical: true)
             .padding(.horizontal, 7).padding(.vertical, 4)
             .background(Color.repickGreen.opacity(0.10), in: RoundedRectangle(cornerRadius: 6))
     }
 
     private func detail(_ text: String) -> some View {
-        Text(text).font(.footnote).foregroundStyle(Color.repickSecondaryText)
+        Text(text).font(AppFont.font(.footnote)).foregroundStyle(Color.repickSecondaryText)
     }
 
     private func nutrient(_ name: LocalizedStringKey, percent: Double, grams: Double?) -> some View {

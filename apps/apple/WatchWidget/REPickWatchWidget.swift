@@ -98,11 +98,11 @@ struct UsagiComplicationView: View {
                         character.frame(width: 53).privacySensitive()
                         VStack(alignment: .leading, spacing: 2) {
                             Text(snapshot.isStale(at: entry.date) ? String(localized: "마지막 기록") : snapshot.name)
-                                .font(.caption2).foregroundStyle(.secondary).lineLimit(1)
+                                .font(AppFont.font(.caption2)).foregroundStyle(.secondary).lineLimit(1)
                             Text("\(snapshot.steps.formatted())보")
-                                .font(.headline).minimumScaleFactor(0.65).lineLimit(1)
+                                .font(AppFont.font(.headline)).minimumScaleFactor(0.65).lineLimit(1)
                             Label("\(snapshot.waterML) mL", systemImage: "drop")
-                                .font(.caption2).minimumScaleFactor(0.7).lineLimit(1)
+                                .font(AppFont.font(.caption2)).minimumScaleFactor(0.7).lineLimit(1)
                         }
                         .privacySensitive()
                     }
@@ -117,11 +117,12 @@ struct UsagiComplicationView: View {
                     HStack {
                         Image(systemName: "pawprint").font(.title2)
                         Text(entry.message ?? String(localized: "iPhone에서 우사기를 만들어 주세요"))
-                            .font(.caption2)
+                            .font(AppFont.font(.caption2))
                     }
                 }
             }
         }
+        .font(AppFont.font(.body))
         .containerBackground(for: .widget) { Color.clear }
     }
 
@@ -154,6 +155,7 @@ struct UsagiComplicationView: View {
 
 @main
 struct REPickWatchWidget: Widget {
+    init() { AppFont.register() }
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: WidgetStorage.watchKind, provider: UsagiComplicationProvider()) { entry in
             UsagiComplicationView(entry: entry)

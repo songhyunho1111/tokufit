@@ -50,11 +50,18 @@ struct ProfileView: View {
                 }
                 Section("섭취 칼로리 목표") {
                     if let minimum = store.state.preferences.calorieMinimum, let maximum = store.state.preferences.calorieMaximum {
-                        LabeledContent("하루 범위", value: "\(minimum.formatted())–\(maximum.formatted()) kcal")
+                        LabeledContent(store.state.calorieRangeChangesTomorrow ? "내일부터" : "하루 범위", value: "\(minimum.formatted())–\(maximum.formatted()) kcal")
                             .accessibilityIdentifier("settings.calorieRange")
                     } else {
-                        Text("설정 안 함").foregroundStyle(Color.repickSecondaryText)
+                        Text(store.state.calorieRangeChangesTomorrow ? "내일부터 설정 해제" : "설정 안 함")
+                            .foregroundStyle(Color.repickSecondaryText)
                     }
+                    if store.state.calorieRangeChangesTomorrow,
+                       let minimum = store.state.dailyCalorieMinimum, let maximum = store.state.dailyCalorieMaximum {
+                        LabeledContent("오늘 적용", value: "\(minimum.formatted())–\(maximum.formatted()) kcal")
+                    }
+                    Text("처음 설정한 범위는 바로 적용되고, 이후 변경은 내일부터 적용돼요.")
+                        .font(AppFont.font(.caption)).foregroundStyle(Color.repickSecondaryText)
                 }
                 .listRowBackground(Color.repickSurface)
                 Section("홈에서 볼 기록") {
@@ -67,7 +74,7 @@ struct ProfileView: View {
                 } footer: { Text("실제 음성이 준비되면 사용할 수 있습니다.") }
                 .listRowBackground(Color.repickSurface)
                 Section {
-                    Text(store.sync.status).font(.subheadline)
+                    Text(store.sync.status).font(AppFont.font(.subheadline))
                     Button("다시 동기화") { store.sync.publish(store.state) }
                         .disabled(store.isSaving)
                 } header: { Text("Apple Watch") } footer: {
@@ -75,7 +82,7 @@ struct ProfileView: View {
                 }
                 .listRowBackground(Color.repickSurface)
                 Section {
-                    Text(store.widget.status).font(.subheadline)
+                    Text(store.widget.status).font(AppFont.font(.subheadline))
                     Button("위젯 새로고침") { store.widget.publish(store.state, forceReload: true) }
                         .disabled(store.isSaving)
                 } header: { Text("홈 화면 위젯") } footer: {
@@ -180,7 +187,7 @@ struct ProfileEditor: View {
                         calorieField("최대 (kcal)", text: $calorieMaximum, id: "profile.calorieMaximum")
                     }
                 } header: { Text("섭취 칼로리 목표") } footer: {
-                    Text("하루 섭취 목표를 직접 입력하세요.")
+                    Text("하루 섭취 범위를 직접 입력하세요. 처음 설정하면 바로 적용되고, 이후 변경하거나 해제하면 내일부터 적용돼요. 오늘의 미션은 오늘 적용 중인 범위로 확인해요.")
                 }
                 .listRowBackground(Color.repickSurface)
                 Section {
@@ -207,7 +214,7 @@ struct ProfileEditor: View {
             .safeAreaInset(edge: .bottom) {
                 if let validationMessage {
                     Text(validationMessage)
-                        .font(.footnote)
+                        .font(AppFont.font(.footnote))
                         .foregroundStyle(Color.repickDanger)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(Design.pagePadding)
@@ -229,7 +236,7 @@ struct ProfileEditor: View {
                 ToolbarItem(placement: .cancellationAction) { Button("닫기") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
                     Button(store.isSaving ? "저장 중" : "저장", action: save)
-                        .fontWeight(.semibold)
+                        .font(AppFont.font(.body, weight: .semibold))
                         .disabled(store.isSaving)
                         .accessibilityIdentifier("save.profile")
                 }

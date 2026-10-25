@@ -82,6 +82,10 @@ final class WidgetStatePublisher {
         let waterML: Int
         let character: CharacterKind
         let items: [WardrobeItem]
+        let muscleLevel: Double
+        let fieryEyes: Bool
+        let nutritionMood: NutritionMood
+        let costume: CostumeStyle?
 
         init(state: UsagiState) {
             hasProfile = state.profile != nil
@@ -90,6 +94,10 @@ final class WidgetStatePublisher {
             waterML = state.daily.waterML
             character = state.preferences.character
             items = state.equippedItems
+            muscleLevel = state.muscleLevel
+            fieryEyes = state.attendanceNeedsAttention
+            nutritionMood = state.nutritionMood
+            costume = state.currentCostume
         }
     }
 }

@@ -36,19 +36,26 @@ public struct FoodPhotoAnalysisRequest: Codable, Equatable, Sendable {
     }
 }
 
+public enum FoodEatingStyle: String, Codable, CaseIterable, Equatable, Sendable {
+    case grass, noodles, rice, tteokbokki
+}
+
 public struct FoodEstimate: Codable, Equatable, Sendable {
     public let name: String
     public let portion: String
     public let calories: Int
     public let nutrients: MealNutrients
     public let notes: String
+    public let eatingStyle: FoodEatingStyle?
 
-    public init(name: String, portion: String, calories: Int, nutrients: MealNutrients, notes: String) throws {
+    public init(name: String, portion: String, calories: Int, nutrients: MealNutrients, notes: String,
+                eatingStyle: FoodEatingStyle? = nil) throws {
         self.name = name
         self.portion = portion
         self.calories = calories
         self.nutrients = nutrients
         self.notes = notes
+        self.eatingStyle = eatingStyle
         try validate()
     }
 
@@ -73,19 +80,21 @@ public struct FoodPhotoAnalysis: Codable, Equatable, Identifiable, Sendable {
     public let status: Status
     public let food: FoodEstimate?
     public let message: String
+    public let alternatives: [FoodEstimate]
 
     private enum CodingKeys: String, CodingKey {
-        case id, createdAt, model, status, food, message
+        case id, createdAt, model, status, food, message, alternatives
     }
 
     public init(id: UUID, createdAt: Date, model: String, status: Status,
-                food: FoodEstimate?, message: String) throws {
+                food: FoodEstimate?, message: String, alternatives: [FoodEstimate] = []) throws {
         self.id = id
         self.createdAt = createdAt
         self.model = model
         self.status = status
         self.food = food
         self.message = message
+        self.alternatives = alternatives
         try validate()
     }
 
@@ -97,6 +106,7 @@ public struct FoodPhotoAnalysis: Codable, Equatable, Identifiable, Sendable {
         status = try values.decode(Status.self, forKey: .status)
         food = try values.decode(FoodEstimate?.self, forKey: .food)
         message = try values.decode(String.self, forKey: .message)
+        alternatives = try values.decodeIfPresent([FoodEstimate].self, forKey: .alternatives) ?? []
     }
 
     public func validate() throws {
@@ -104,8 +114,21 @@ public struct FoodPhotoAnalysis: Codable, Equatable, Identifiable, Sendable {
               !model.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, model.count <= 160,
               !message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, message.count <= 300,
               message.range(of: "[가-힣]", options: .regularExpression) != nil,
-              (status == .recognized) == (food != nil) else { throw FoodPhotoAnalysisError.invalidResponse }
+              (status == .recognized) == (food != nil), alternatives.count <= 2,
+              status == .recognized || alternatives.isEmpty else { throw FoodPhotoAnalysisError.invalidResponse }
         try food?.validate()
+        for alternative in alternatives {
+            try alternative.validate()
+            guard alternative.eatingStyle != nil else { throw FoodPhotoAnalysisError.invalidEstimate }
+        }
+        let estimates = (food.map { [$0] } ?? []) + alternatives
+        let normalizedNames = estimates.map { $0.name }.map {
+            $0.precomposedStringWithCompatibilityMapping
+                .components(separatedBy: .whitespacesAndNewlines).joined().lowercased()
+        }
+        guard Set(normalizedNames).count == normalizedNames.count else {
+            throw FoodPhotoAnalysisError.invalidResponse
+        }
     }
 
     public func encode(to encoder: any Encoder) throws {
@@ -116,6 +139,7 @@ public struct FoodPhotoAnalysis: Codable, Equatable, Identifiable, Sendable {
         try values.encode(status, forKey: .status)
         try values.encode(food, forKey: .food)
         try values.encode(message, forKey: .message)
+        try values.encode(alternatives, forKey: .alternatives)
     }
 }
 

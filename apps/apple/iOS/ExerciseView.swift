@@ -34,6 +34,7 @@ struct ExerciseView: View {
                 IndoorExerciseView()
             }
         }
+        .font(AppFont.font(.body))
         .background(Color.repickCream)
         .onChange(of: store.state.activeWorkout?.mode, initial: true) { _, activeMode in
             if let activeMode { mode = activeMode }
@@ -46,6 +47,7 @@ private struct IndoorExerciseView: View {
     @Environment(UsagiStore.self) private var store
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var completion: Completion?
+    @State private var activity: WorkoutActivity = .other
 
     private struct Completion: Identifiable {
         let session: WorkoutSession
@@ -59,24 +61,40 @@ private struct IndoorExerciseView: View {
         ScrollView {
             VStack(spacing: Design.sectionSpacing) {
                 Text("실내 운동")
-                    .font(.headline)
+                    .font(AppFont.font(.headline))
                     .frame(maxWidth: .infinity, alignment: .leading)
+                if session == nil {
+                    Picker("운동 종류", selection: $activity) {
+                        ForEach(WorkoutActivity.allCases) { activity in
+                            Text(activity.name).tag(activity)
+                        }
+                    }
+                    .accessibilityIdentifier("exercise.indoor.activity")
+                    .frame(minHeight: Design.controlHeight)
+                    Text("종류를 선택하면 운동 시간과 체중으로 소모 칼로리를 추정해요. 기타는 추정하지 않아요.")
+                        .font(AppFont.font(.footnote))
+                        .foregroundStyle(Color.repickSecondaryText)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
                 MapUsagiView(bodyScale: store.state.bodyScale, outfit: store.state.equippedOutfit,
                              heading: 180, cameraHeading: 0,
                              motion: session == nil ? .idle : .exercising,
                              waterLevel: Double(store.state.daily.waterML) / 2_000,
                              accessibilityIdentifier: "exercise.indoor.character",
-                             character: store.state.preferences.character, equippedItems: store.state.equippedItems)
+                             character: store.state.preferences.character, equippedItems: store.state.equippedItems,
+                             muscleLevel: store.state.muscleLevel, fieryEyes: store.state.attendanceNeedsAttention,
+                             nutritionMood: store.state.nutritionMood, costume: store.state.currentCostume)
                     .frame(height: dynamicTypeSize.isAccessibilitySize ? 180 : 250)
                 if let session {
                     Text(session.startedAt, style: .timer)
-                        .font(.system(.largeTitle, design: .rounded, weight: .semibold)).monospacedDigit()
+                        .font(AppFont.font(.largeTitle, weight: .semibold)).monospacedDigit()
                         .accessibilityLabel("운동 경과 시간")
                         .accessibilityValue(Text(session.startedAt, style: .timer))
                         .accessibilityIdentifier("exercise.elapsed")
+                    WorkoutEnergySummary(session: session, weightKG: store.state.profile?.weightKG)
                 }
                 Label(store.sync.status, systemImage: "applewatch")
-                    .font(.footnote)
+                    .font(AppFont.font(.footnote))
                     .foregroundStyle(Color.repickSecondaryText)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
@@ -110,7 +128,7 @@ private struct IndoorExerciseView: View {
             .accessibilityIdentifier("exercise.complete")
         } else {
             Button("실내 운동 시작") {
-                Task { await store.update { try $0.startWorkout(mode: .indoor) } }
+                Task { await store.update { try $0.startWorkout(mode: .indoor, activity: activity) } }
             }
             .buttonStyle(PrimaryButtonStyle())
             .disabled(store.isSaving || store.state.profile == nil)
@@ -137,12 +155,12 @@ private struct WorkoutHistoryView: View {
                                 ? AnyLayout(VStackLayout(alignment: .leading, spacing: 4))
                                 : AnyLayout(HStackLayout())
                             headingLayout {
-                                Text(record.mode.name).font(.headline)
+                                Text(record.activity?.name ?? record.mode.name).font(AppFont.font(.headline))
                                 if !dynamicTypeSize.isAccessibilitySize { Spacer() }
-                                Text("\(record.durationMinutes)분").font(.headline).monospacedDigit()
+                                Text("\(record.durationMinutes)분").font(AppFont.font(.headline)).monospacedDigit()
                             }
                             Text(record.startedAt.formatted(date: .abbreviated, time: .shortened))
-                                .font(.caption).foregroundStyle(Color.repickSecondaryText)
+                                .font(AppFont.font(.caption)).foregroundStyle(Color.repickSecondaryText)
                             let metricLayout = dynamicTypeSize.isAccessibilitySize
                                 ? AnyLayout(VStackLayout(alignment: .leading, spacing: 4))
                                 : AnyLayout(HStackLayout(spacing: 12))
@@ -151,8 +169,11 @@ private struct WorkoutHistoryView: View {
                                 if let distance = record.distanceMeters {
                                     Text("\((distance / 1_000).formatted(.number.precision(.fractionLength(0...2)))) km")
                                 }
-                                if let calories = record.calories { Text("\(calories) kcal") }
-                            }.font(.subheadline)
+                                if let calories = record.calories {
+                                    if record.calorieSource == .estimated { Text("약 \(calories) kcal · 추정") }
+                                    else { Text("\(calories) kcal") }
+                                }
+                            }.font(AppFont.font(.subheadline))
                         }
                         .padding(.vertical, 4)
                         .accessibilityIdentifier("exercise.record.\(record.id.uuidString)")
@@ -161,11 +182,38 @@ private struct WorkoutHistoryView: View {
                 }
             }
             .scrollContentBackground(.hidden)
+            .font(AppFont.font(.body))
             .background(Color.repickCream)
             .foregroundStyle(Color.repickInk)
             .navigationTitle("운동 기록")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("닫기") { dismiss() } } }
         }
+    }
+}
+
+struct WorkoutEnergySummary: View {
+    let session: WorkoutSession
+    let weightKG: Double?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            LabeledContent("운동 종류", value: session.activity?.name ?? String(localized: "선택 안 함"))
+            TimelineView(.periodic(from: session.startedAt, by: 60)) { context in
+                let elapsed = max(0, Int(context.date.timeIntervalSince(session.startedAt) / 60))
+                LabeledContent("소모 칼로리 · 추정") {
+                    if let activity = session.activity, let weightKG,
+                       let estimate = ExerciseEnergy.estimateCalories(activity: activity, minutes: elapsed, weightKG: weightKG) {
+                        Text("약 \(estimate) kcal").monospacedDigit()
+                    }
+                    else { Text("추정값 없음").foregroundStyle(Color.repickSecondaryText) }
+                }
+                .accessibilityIdentifier("exercise.liveEstimate")
+            }
+            Text("시간·종류·체중으로 계산한 추정치예요. 완료할 때 실제 운동 시간과 칼로리를 수정할 수 있어요.")
+                .font(AppFont.font(.footnote))
+                .foregroundStyle(Color.repickSecondaryText)
+        }
+        .font(AppFont.font(.body))
     }
 }

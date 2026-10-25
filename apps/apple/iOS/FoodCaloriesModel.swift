@@ -11,6 +11,15 @@ struct FoodNutritionDraft {
     var protein: String
     var fat: String
 
+    init() {
+        name = ""
+        portion = ""
+        calories = ""
+        carbohydrates = ""
+        protein = ""
+        fat = ""
+    }
+
     init(_ food: FoodEstimate) {
         name = food.name
         portion = food.portion
@@ -28,13 +37,13 @@ struct FoodNutritionDraft {
         return result
     }
 
-    func estimate(notes: String) throws -> FoodEstimate {
+    func estimate(notes: String, eatingStyle: FoodEatingStyle? = nil) throws -> FoodEstimate {
         guard let amount = Int(calories.trimmingCharacters(in: .whitespacesAndNewlines)) else {
             throw FoodPhotoAnalysisError.invalidEstimate
         }
         return try FoodEstimate(name: name.trimmingCharacters(in: .whitespacesAndNewlines),
                                 portion: portion.trimmingCharacters(in: .whitespacesAndNewlines),
-                                calories: amount, nutrients: nutrients(), notes: notes)
+                                calories: amount, nutrients: nutrients(), notes: notes, eatingStyle: eatingStyle)
     }
 
     var macroEnergy: Double? {
@@ -50,6 +59,10 @@ final class FoodCaloriesModel {
     private(set) var stage = Stage.capture
     private(set) var photo: PreparedFoodPhoto?
     private(set) var analysis: FoodPhotoAnalysis?
+    private(set) var selectedFood: FoodEstimate?
+    private(set) var selectedCandidateIndex = 0
+    private(set) var selectedMealKind = MealKind.breakfast
+    private(set) var photoMealKind: MealKind?
     var draft: FoodNutritionDraft?
     private(set) var isImporting = false
     private(set) var isAnalyzing = false
@@ -59,10 +72,40 @@ final class FoodCaloriesModel {
     private var operation: Task<Void, Never>?
     private var operationID = UUID()
 
+    var eatingStyle: FoodEatingStyle { selectedFood?.eatingStyle ?? .rice }
+
+    var foodCandidates: [FoodEstimate] {
+        guard let analysis, let food = analysis.food else { return [] }
+        return [food] + analysis.alternatives
+    }
+
+    var displayedFood: FoodEstimate? {
+        guard let draft else { return selectedFood }
+        return try? draft.estimate(notes: selectedFood?.notes ?? "", eatingStyle: selectedFood?.eatingStyle)
+    }
+
+    var isDraftEdited: Bool { displayedFood != selectedFood }
+
+    func selectMealKind(_ kind: MealKind) {
+        guard !isImporting, !isAnalyzing, !isSaving else { return }
+        selectedMealKind = kind
+        if photo != nil { photoMealKind = kind }
+    }
+
+    func selectCandidate(_ index: Int) {
+        guard stage == .confirmation, !isSaving, foodCandidates.indices.contains(index),
+              index != selectedCandidateIndex else { return }
+        selectedCandidateIndex = index
+        selectedFood = foodCandidates[index]
+        draft = selectedFood.map(FoodNutritionDraft.init)
+        errorMessage = nil
+    }
+
     func importPhoto(_ item: PhotosPickerItem) {
         guard isActive, !isSaving else { return }
         cancelPending()
         let current = operationID
+        let kind = selectedMealKind
         errorMessage = nil
         isImporting = true
         operation = Task {
@@ -73,7 +116,7 @@ final class FoodCaloriesModel {
                 }
                 try Task.checkCancellation()
                 guard operationID == current else { return }
-                setPhoto(imported.photo)
+                setPhoto(imported.photo, kind: kind)
             } catch is CancellationError {
             } catch {
                 guard operationID == current, !Task.isCancelled else { return }
@@ -82,10 +125,10 @@ final class FoodCaloriesModel {
         }
     }
 
-    func acceptPhoto(_ photo: PreparedFoodPhoto) {
+    func acceptPhoto(_ photo: PreparedFoodPhoto, kind: MealKind? = nil) {
         guard isActive, !isSaving else { return }
         cancelPending()
-        setPhoto(photo)
+        setPhoto(photo, kind: kind ?? selectedMealKind)
     }
 
     func analyze(baseURL: String) {
@@ -102,6 +145,8 @@ final class FoodCaloriesModel {
                 try Task.checkCancellation()
                 guard operationID == current else { return }
                 analysis = result
+                selectedFood = result.food
+                selectedCandidateIndex = 0
                 draft = result.food.map(FoodNutritionDraft.init)
                 stage = .confirmation
             } catch is CancellationError {
@@ -120,7 +165,8 @@ final class FoodCaloriesModel {
     }
 
     func confirmFood() {
-        guard stage == .confirmation, analysis?.food != nil else { return }
+        guard stage == .confirmation, !isSaving else { return }
+        if draft == nil { draft = FoodNutritionDraft() }
         errorMessage = nil
         stage = .review
     }
@@ -142,6 +188,9 @@ final class FoodCaloriesModel {
         cancelPending()
         photo = nil
         analysis = nil
+        selectedFood = nil
+        selectedCandidateIndex = 0
+        photoMealKind = nil
         draft = nil
         errorMessage = nil
         stage = .capture
@@ -168,14 +217,15 @@ final class FoodCaloriesModel {
     func selectionIsCurrent(_ id: UUID) -> Bool { isActive && operationID == id }
 
     func register(in store: UsagiStore) {
-        guard isActive, stage == .review, !isSaving, let analysis, let original = analysis.food, let draft else { return }
+        guard isActive, [.confirmation, .review].contains(stage), !isSaving,
+              let analysis, let draft, let kind = photoMealKind else { return }
         guard !store.isSaving else {
             errorMessage = String(localized: "다른 기록을 저장하고 있어요. 잠시 후 다시 등록해 주세요.")
             return
         }
         do {
-            let edited = try draft.estimate(notes: original.notes)
-            let source: MealSource = edited == original ? .photoAI : .manual
+            let edited = try draft.estimate(notes: selectedFood?.notes ?? "", eatingStyle: selectedFood?.eatingStyle)
+            let source: MealSource = edited == selectedFood ? .photoAI : .manual
             let name = "\(edited.name) · \(edited.portion)"
             guard name.count <= 120 else {
                 errorMessage = String(localized: "음식 이름과 먹은 양을 합쳐 120자 이내로 입력해 주세요.")
@@ -187,7 +237,7 @@ final class FoodCaloriesModel {
                 defer { isSaving = false }
                 let saved = await store.update {
                     try $0.addMeal(name: name, calories: edited.calories, source: source,
-                                   nutrients: edited.nutrients, id: analysis.id)
+                                   nutrients: edited.nutrients, id: analysis.id, kind: kind)
                 }
                 if saved { stage = .saved }
                 else {
@@ -197,9 +247,13 @@ final class FoodCaloriesModel {
         } catch { errorMessage = error.localizedDescription }
     }
 
-    private func setPhoto(_ photo: PreparedFoodPhoto) {
+    private func setPhoto(_ photo: PreparedFoodPhoto, kind: MealKind) {
         self.photo = photo
+        photoMealKind = kind
+        selectedMealKind = kind
         analysis = nil
+        selectedFood = nil
+        selectedCandidateIndex = 0
         draft = nil
         errorMessage = nil
         stage = .preview

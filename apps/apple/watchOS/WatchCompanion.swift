@@ -14,18 +14,20 @@ final class WatchCompanion: NSObject {
     private(set) var complicationError: String?
     private(set) var characterPNG: Data?
     private(set) var characterImage: UIImage?
+    private(set) var isCharacterImageStale = false
     private(set) var workoutMinutesToday = 0
 
     private let defaults: UserDefaults
     let session: WCSession?
-    private let complication = WatchComplicationPublisher()
+    private let complication: WatchComplicationPublisher
 
     override convenience init() {
         self.init(defaults: .standard)
     }
 
-    init(defaults: UserDefaults) {
+    init(defaults: UserDefaults, complication: WatchComplicationPublisher = WatchComplicationPublisher()) {
         self.defaults = defaults
+        self.complication = complication
         session = WCSession.isSupported() ? .default : nil
         super.init()
         if let context = defaults.dictionary(forKey: "companion.context") {
@@ -55,12 +57,15 @@ final class WatchCompanion: NSObject {
         guard let version = context["version"] as? Int, version == 1,
               let data = context["data"] as? Data,
               let timestamp = context["updatedAt"] as? Double,
+              context["isCharacterImageStale"] == nil || context["isCharacterImageStale"] is Bool,
               context["workoutMinutesToday"] == nil || context["workoutMinutesToday"] is Int else { return }
         receive(data: data, timestamp: timestamp, characterPNG: context["characterPNG"] as? Data,
-                workoutMinutesToday: context["workoutMinutesToday"] as? Int, persist: true)
+                workoutMinutesToday: context["workoutMinutesToday"] as? Int,
+                isCharacterImageStale: context["isCharacterImageStale"] as? Bool ?? false, persist: true)
     }
 
-    private func receive(data: Data, timestamp: Double, characterPNG: Data?, workoutMinutesToday: Int?, persist: Bool) {
+    private func receive(data: Data, timestamp: Double, characterPNG: Data?, workoutMinutesToday: Int?,
+                         isCharacterImageStale: Bool = false, persist: Bool) {
         guard data.count <= 500_000, timestamp.isFinite, timestamp > 0,
               workoutMinutesToday.map({ (0...288_000).contains($0) }) ?? true,
               timestamp <= Date().addingTimeInterval(5 * 60).timeIntervalSince1970 else {
@@ -74,22 +79,27 @@ final class WatchCompanion: NSObject {
             let snapshot = try decoder.decode(UsagiState.self, from: data)
             try snapshot.validate()
             try WatchComplicationPublisher.validateImage(characterPNG)
+            let retainedPNG = snapshot.profile == nil ? nil : (characterPNG ?? self.characterPNG)
             state = snapshot
-            if self.characterPNG != characterPNG {
-                characterImage = characterPNG.flatMap(WatchCharacterImage.prepare)
-                self.characterPNG = characterPNG
+            if self.characterPNG != retainedPNG {
+                characterImage = retainedPNG.flatMap(WatchCharacterImage.prepare)
+                self.characterPNG = retainedPNG
             }
+            self.isCharacterImageStale = retainedPNG != nil && (characterPNG == nil || isCharacterImageStale)
             self.workoutMinutesToday = workoutMinutesToday ?? snapshot.workoutMinutesToday
             updatedAt = Date(timeIntervalSince1970: timestamp)
             errorMessage = nil
             if persist {
                 var context: [String: Any] = ["version": 1, "data": data, "updatedAt": timestamp,
-                                              "workoutMinutesToday": self.workoutMinutesToday]
-                context["characterPNG"] = characterPNG
+                                              "workoutMinutesToday": self.workoutMinutesToday,
+                                              "isCharacterImageStale": self.isCharacterImageStale]
+                context["characterPNG"] = retainedPNG
                 defaults.set(context, forKey: "companion.context")
             }
+            // Keep the complication's original timestamp and metrics until its image is current too.
+            guard snapshot.profile == nil || (characterPNG != nil && !isCharacterImageStale) else { return }
             do {
-                try complication.publish(state: snapshot, updatedAt: Date(timeIntervalSince1970: timestamp), characterPNG: characterPNG)
+                try complication.publish(state: snapshot, updatedAt: Date(timeIntervalSince1970: timestamp), characterPNG: retainedPNG)
                 complicationError = nil
             } catch {
                 complicationError = String(localized: "워치페이스를 갱신하지 못했어요. 앱을 다시 열어 주세요.")

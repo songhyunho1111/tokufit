@@ -40,6 +40,14 @@ final class REPickUITests: XCTestCase {
 
     func testWorkoutFocusAndExit() throws {
         continueAfterFailure = false
+        let acceptPermissions: (XCUIElement) -> Bool = { alert in
+            for label in ["앱을 사용하는 동안 허용", "앱을 사용하는 동안", "허용", "Allow While Using App", "Allow"] {
+                if alert.buttons[label].exists { alert.buttons[label].tap(); return true }
+            }
+            return false
+        }
+        let permissionMonitor = addUIInterruptionMonitor(withDescription: "Workout permissions", handler: acceptPermissions)
+        defer { removeUIInterruptionMonitor(permissionMonitor) }
         XCUIDevice.shared.location = XCUILocation(location: CLLocation(
             coordinate: CLLocationCoordinate2D(latitude: 37.4840451, longitude: 126.9293904),
             altitude: 0, horizontalAccuracy: 5, verticalAccuracy: 5,
@@ -47,6 +55,7 @@ final class REPickUITests: XCTestCase {
         ))
         defer { XCUIDevice.shared.location = nil }
         let app = XCUIApplication()
+        app.resetAuthorizationStatus(for: .location)
         app.launchArguments = ["--ui-testing-use-store", "-AppleLanguages", "(ko)", "-AppleLocale", "ko_KR"]
         app.launch()
         completeOnboardingIfNeeded(in: app)
@@ -64,6 +73,16 @@ final class REPickUITests: XCTestCase {
         ready.lifetime = .keepAlways
         add(ready)
         start.tap()
+        let system = XCUIApplication(bundleIdentifier: "com.apple.springboard")
+        for _ in 0..<3 {
+            let alert = system.alerts.firstMatch
+            guard alert.waitForExistence(timeout: 2), acceptPermissions(alert) else { break }
+        }
+        XCUIDevice.shared.location = XCUILocation(location: CLLocation(
+            coordinate: CLLocationCoordinate2D(latitude: 37.4840451, longitude: 126.9293904),
+            altitude: 0, horizontalAccuracy: 5, verticalAccuracy: 5,
+            course: 270, speed: 1.4, timestamp: Date()
+        ))
         XCTAssertTrue(app.buttons["workout.menu"].waitForExistence(timeout: 10))
         XCTAssertFalse(app.tabBars.buttons["홈"].isHittable)
         XCTAssertFalse(app.buttons["walk.start"].isHittable)
@@ -490,6 +509,11 @@ final class REPickUITests: XCTestCase {
 
     private func completeOnboardingIfNeeded(in app: XCUIApplication) {
         guard app.buttons["onboarding.next"].waitForExistence(timeout: 3) else { return }
+        if app.buttons["onboarding.character.usagi"].exists {
+            app.buttons["onboarding.character.usagi"].tap()
+            app.buttons["onboarding.next"].tap()
+        }
+        if app.textFields["onboarding.name"].exists { app.buttons["onboarding.next"].tap() }
         if app.sliders["onboarding.height"].exists { app.buttons["onboarding.next"].tap() }
         if app.sliders["onboarding.weight"].waitForExistence(timeout: 2) { app.buttons["onboarding.next"].tap() }
         if app.buttons["onboarding.gender.notSpecified"].waitForExistence(timeout: 2) {

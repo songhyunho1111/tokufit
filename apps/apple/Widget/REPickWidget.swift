@@ -67,10 +67,10 @@ struct UsagiWidgetView: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Text(entry.payload?.snapshot.name ?? String(localized: "나의 캐릭터"))
-                    .font(.headline).lineLimit(1).minimumScaleFactor(0.7)
+                    .font(AppFont.font(.headline)).lineLimit(1).minimumScaleFactor(0.7)
                 Spacer()
                 if let snapshot = entry.payload?.snapshot, snapshot.hasProfile {
-                    Text("\(snapshot.points)P").font(.subheadline.weight(.semibold))
+                    Text("\(snapshot.points)P").font(AppFont.font(.subheadline, weight: .semibold))
                 }
             }
             if let payload = entry.payload, payload.snapshot.hasProfile {
@@ -78,11 +78,11 @@ struct UsagiWidgetView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 HStack(alignment: .firstTextBaseline) {
                     Text("\(payload.snapshot.steps.formatted())보")
-                        .font(.system(.title2, design: .rounded, weight: .semibold))
+                        .font(AppFont.font(.title2, weight: .semibold))
                         .minimumScaleFactor(0.7)
                     Spacer(minLength: 4)
                     Text("목표 \(payload.snapshot.goalSteps.formatted())보")
-                        .font(.caption)
+                        .font(AppFont.font(.caption))
                         .foregroundStyle(.secondary)
                 }
                 ProgressView(value: min(1, Double(payload.snapshot.steps) / Double(payload.snapshot.goalSteps)))
@@ -96,19 +96,20 @@ struct UsagiWidgetView: View {
                         Text("오늘")
                     }
                 }
-                .font(.caption)
+                .font(AppFont.font(.caption))
                 .foregroundStyle(.secondary)
                 Text("업데이트 \(payload.snapshot.updatedAt.formatted(.dateTime.month().day().hour().minute()))")
-                    .font(.caption2).foregroundStyle(.secondary)
+                    .font(AppFont.font(.caption2)).foregroundStyle(.secondary)
             } else {
                 Spacer(minLength: 0)
                 Image(systemName: "pawprint").font(.system(size: 40)).foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity)
                 Text(entry.message ?? String(localized: "앱에서 우사기를 만들어 주세요"))
-                    .font(.subheadline).multilineTextAlignment(.center).frame(maxWidth: .infinity)
+                    .font(AppFont.font(.subheadline)).multilineTextAlignment(.center).frame(maxWidth: .infinity)
                 Spacer(minLength: 0)
             }
         }
+        .font(AppFont.font(.body))
         .widgetURL(URL(string: "repick://care"))
         .containerBackground(for: .widget) { Color(uiColor: .systemBackground) }
     }
@@ -119,13 +120,14 @@ struct UsagiWidgetView: View {
             Image(uiImage: image).resizable().scaledToFit().accessibilityLabel(Text(payload.snapshot.name))
         } else {
             Text("우사기 이미지를 불러올 수 없어요")
-                .font(.caption).foregroundStyle(.secondary)
+                .font(AppFont.font(.caption)).foregroundStyle(.secondary)
         }
     }
 }
 
 @main
 struct REPickWidgets: WidgetBundle {
+    init() { AppFont.register() }
     var body: some Widget { REPickUsagiWidget() }
 }
 

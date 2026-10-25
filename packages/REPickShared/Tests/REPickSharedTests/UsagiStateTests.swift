@@ -160,13 +160,13 @@ func eachHigherGoalIncreasesRewardWhileDrawsFollowTheirTier(goal: Int) throws {
     #expect(try snapshot(state) == before)
 }
 
-@Test func avatarRespondsToFoodWithoutChangingMeasuredBMI() throws {
+@Test func foodWithoutACalorieRangeKeepsNeutralAppearanceAndMeasuredBMI() throws {
     var state = try configuredState()
     let bmi = try #require(state.profile?.bmi)
     let scale = state.bodyScale
     let targetScale = state.targetBodyScale
     try state.addMeal(name: "떡볶이", calories: 550, source: .onDeviceAI, now: testDay)
-    #expect(state.bodyScale > scale)
+    #expect(state.bodyScale == scale && state.bodyScale == 1)
     #expect(state.targetBodyScale == targetScale)
     #expect(state.profile?.bmi == bmi)
     #expect(state.totalFoodCalories == 550)

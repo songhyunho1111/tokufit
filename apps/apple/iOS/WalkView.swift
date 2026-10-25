@@ -19,6 +19,7 @@ struct WalkView: View {
     @State private var destination: WalkingDestination?
     @State private var isOpeningDirections = false
     @State private var showsDirectionsError = false
+    @State private var activity: WorkoutActivity = .walking
 
     private var isWalkingSession: Bool { store.state.activeWorkout?.mode == .outdoor }
 
@@ -42,6 +43,7 @@ struct WalkView: View {
                 startPanel.frame(maxWidth: 560).padding(.horizontal, Design.pagePadding).padding(.bottom, 12)
             }
         }
+        .font(AppFont.font(.body))
         .clipped()
         .background(Color.repickCream.ignoresSafeArea())
         .ignoresSafeArea(edges: isWalkingSession ? [.top, .bottom] : [])
@@ -112,7 +114,9 @@ struct WalkView: View {
                     MapUsagiView(bodyScale: store.state.bodyScale, outfit: store.state.equippedOutfit,
                                  isWalking: location.isWalking, heading: location.heading ?? 0,
                                  cameraHeading: cameraHeading,
-                                 character: store.state.preferences.character, equippedItems: store.state.equippedItems)
+                                 character: store.state.preferences.character, equippedItems: store.state.equippedItems,
+                                 muscleLevel: store.state.muscleLevel, fieryEyes: store.state.attendanceNeedsAttention,
+                                 nutritionMood: store.state.nutritionMood, costume: store.state.currentCostume)
                         .frame(width: 100 * avatarZoomScale, height: 130 * avatarZoomScale)
                         .accessibilityLabel("지도 위 \(store.state.preferences.name)")
                 }
@@ -158,14 +162,21 @@ struct WalkView: View {
         VStack(alignment: .leading, spacing: 12) {
             destinationControls
             Divider()
+            Picker("운동 종류", selection: $activity) {
+                ForEach(WorkoutActivity.allCases) { activity in
+                    Text(activity.name).tag(activity)
+                }
+            }
+            .accessibilityIdentifier("walk.activity")
+            .frame(minHeight: Design.controlHeight)
             HStack {
                 Label("\(store.state.daily.steps.formatted())보", systemImage: "shoeprints.fill")
-                    .font(.title3.weight(.semibold)).monospacedDigit()
+                    .font(AppFont.font(.title3, weight: .semibold)).monospacedDigit()
                 Spacer()
-                Text("목표 \(store.state.daily.goalSteps.formatted())보").font(.subheadline).foregroundStyle(Color.repickSecondaryText)
+                Text("목표 \(store.state.daily.goalSteps.formatted())보").font(AppFont.font(.subheadline)).foregroundStyle(Color.repickSecondaryText)
             }
             HStack(spacing: 12) {
-                Text(location.status).font(.footnote).foregroundStyle(Color.repickSecondaryText)
+                Text(location.status).font(AppFont.font(.footnote)).foregroundStyle(Color.repickSecondaryText)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 Button {
                     cameraDistance = visibleCameraDistance
@@ -184,9 +195,9 @@ struct WalkView: View {
             if location.authorization == .denied || location.authorization == .restricted {
                 Button("위치 권한 설정 열기") {
                     if let url = URL(string: UIApplication.openSettingsURLString) { openURL(url) }
-                }.font(.subheadline).frame(minHeight: 44)
+                }.font(AppFont.font(.subheadline)).frame(minHeight: 44)
             }
-            Text("앱 사용 중에만 위치를 표시합니다.").font(.footnote).foregroundStyle(Color.repickSecondaryText)
+            Text("앱 사용 중에만 위치를 표시합니다.").font(AppFont.font(.footnote)).foregroundStyle(Color.repickSecondaryText)
         }
         .padding(Design.cardPadding)
     }
@@ -199,10 +210,10 @@ struct WalkView: View {
                         Image(systemName: destination == nil ? "magnifyingglass" : "mappin.circle.fill")
                         VStack(alignment: .leading, spacing: 3) {
                             Text(destination?.name ?? String(localized: "목적지 검색"))
-                                .font(.body.weight(.semibold))
+                                .font(AppFont.font(.body, weight: .semibold))
                                 .lineLimit(2)
                             if let destination, !destination.address.isEmpty {
-                                Text(destination.address).font(.caption)
+                                Text(destination.address).font(AppFont.font(.caption))
                                     .foregroundStyle(Color.repickSecondaryText).lineLimit(2)
                             }
                         }
@@ -235,7 +246,7 @@ struct WalkView: View {
                 .disabled(isOpeningDirections)
                 .accessibilityIdentifier("walk.openDirections")
                 Text("길 안내는 Apple 지도에서 진행됩니다.")
-                    .font(.footnote).foregroundStyle(Color.repickSecondaryText)
+                    .font(AppFont.font(.footnote)).foregroundStyle(Color.repickSecondaryText)
             }
         }
     }
@@ -274,10 +285,11 @@ struct WalkView: View {
                             Spacer()
                             Text(session.startedAt, style: .timer).monospacedDigit()
                         }
+                        WorkoutEnergySummary(session: session, weightKG: store.state.profile?.weightKG)
                     }
                     LabeledContent("오늘 걸음 수", value: "\(store.state.daily.steps.formatted())보")
                     LabeledContent("목표", value: "\(store.state.daily.goalSteps.formatted())보")
-                    Text(location.status).font(.footnote).foregroundStyle(Color.repickSecondaryText)
+                    Text(location.status).font(AppFont.font(.footnote)).foregroundStyle(Color.repickSecondaryText)
                     if !location.isTracking {
                         Button("위치 다시 연결") { location.start() }
                     }
@@ -299,6 +311,7 @@ struct WalkView: View {
                         .accessibilityIdentifier("workout.end")
                 }
             }
+            .font(AppFont.font(.body))
             .navigationTitle("야외 운동").navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("닫기") { activeSheet = nil } } }
         }.presentationDetents([.medium, .large]).presentationDragIndicator(.visible)
@@ -308,7 +321,7 @@ struct WalkView: View {
         guard location.authorization != .denied,
               location.authorization != .restricted else { location.start(); return }
         Task {
-            if await store.update({ try $0.startWorkout(mode: .outdoor) }) {
+            if await store.update({ try $0.startWorkout(mode: .outdoor, activity: activity) }) {
                 followsUsagi = true
                 cameraDistance = 450
                 steps.start()

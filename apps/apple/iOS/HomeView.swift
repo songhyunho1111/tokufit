@@ -16,10 +16,10 @@ struct HomeView: View {
                 TabView(selection: $selection) {
                     CareView(steps: steps).tabItem { Label("홈", systemImage: "house") }.tag(1)
                     ExerciseView(steps: steps).tabItem { Label("운동", systemImage: "figure.run") }.tag(0)
+                    FoodCaloriesView(isSelected: selection == 4, onClose: { selection = 1 })
+                        .tabItem { Label("음식 칼로리", systemImage: "camera") }.tag(4)
                     WardrobeView().tabItem { Label("꾸미기", systemImage: "tshirt") }.tag(2)
                     ProfileView().tabItem { Label("설정", systemImage: "gearshape") }.tag(3)
-                    FoodCaloriesView(isSelected: selection == 4)
-                        .tabItem { Label("음식 칼로리", systemImage: "camera") }.tag(4)
                 }
             } else if store.loadFailed {
                 ContentUnavailableView {
@@ -33,7 +33,9 @@ struct HomeView: View {
                 ProgressView("불러오는 중")
             }
         }
+        .font(AppFont.font(.body))
         .foregroundStyle(Color.repickInk)
+        .background(Color.repickCream.ignoresSafeArea())
         .onOpenURL { url in
             guard url.scheme == "repick" else { return }
             switch url.host {

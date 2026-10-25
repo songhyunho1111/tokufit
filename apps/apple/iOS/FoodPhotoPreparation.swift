@@ -3,9 +3,6 @@ import Foundation
 import ImageIO
 import REPickShared
 import UniformTypeIdentifiers
-#if canImport(UIKit)
-import UIKit
-#endif
 
 struct PreparedFoodPhoto: Sendable {
     let jpegData: Data
@@ -76,30 +73,6 @@ enum FoodPhotoPreparation {
         return try encode(thumbnail)
     }
 
-    #if canImport(UIKit)
-    @MainActor
-    static func prepare(cameraImage image: UIImage) throws -> PreparedFoodPhoto {
-        guard let original = image.cgImage else { throw FoodPhotoError.invalidImage }
-        let rotated = [.left, .right, .leftMirrored, .rightMirrored].contains(image.imageOrientation)
-        let width = Double(rotated ? original.height : original.width)
-        let height = Double(rotated ? original.width : original.height)
-        try validateDimensions(width: width, height: height)
-        let factor = min(1, Double(maximumEdge) / max(width, height))
-        let size = CGSize(width: max(1, floor(width * factor)), height: max(1, floor(height * factor)))
-        let format = UIGraphicsImageRendererFormat()
-        format.scale = 1
-        format.opaque = true
-        format.preferredRange = .standard
-        let rendered = UIGraphicsImageRenderer(size: size, format: format).image { context in
-            UIColor.white.setFill()
-            context.fill(CGRect(origin: .zero, size: size))
-            image.draw(in: CGRect(origin: .zero, size: size))
-        }
-        guard let pixels = rendered.cgImage else { throw FoodPhotoError.invalidImage }
-        return try encode(pixels)
-    }
-    #endif
-
     private static func validateDimensions(width: Double, height: Double) throws {
         guard width.isFinite, height.isFinite, width > 0, height > 0,
               width <= 20_000, height <= 20_000, width * height <= 100_000_000 else {
@@ -139,7 +112,7 @@ enum FoodPhotoPreparation {
 
 enum FoodPhotoError: Error, LocalizedError, Sendable {
     case invalidImage, imageTooLarge, invalidDimensions
-    case cameraUnavailable, cameraAccessDenied, cameraRestricted
+    case cameraUnavailable, cameraAccessDenied, cameraRestricted, cameraInterrupted, cameraCaptureFailed
 
     var errorDescription: String? {
         switch self {
@@ -149,6 +122,8 @@ enum FoodPhotoError: Error, LocalizedError, Sendable {
         case .cameraUnavailable: String(localized: "이 기기에서는 카메라를 사용할 수 없어요. 사진 보관함에서 선택해 주세요.")
         case .cameraAccessDenied: String(localized: "카메라 접근이 꺼져 있어요. 설정에서 카메라 접근을 허용하거나 사진 보관함에서 선택해 주세요.")
         case .cameraRestricted: String(localized: "이 기기에서 카메라 사용이 제한되어 있어요. 사진 보관함에서 선택해 주세요.")
+        case .cameraInterrupted: String(localized: "카메라를 잠시 사용할 수 없어요. 다시 시도하거나 사진 보관함에서 선택해 주세요.")
+        case .cameraCaptureFailed: String(localized: "사진을 촬영하지 못했어요. 다시 시도하거나 사진 보관함에서 선택해 주세요.")
         }
     }
 }

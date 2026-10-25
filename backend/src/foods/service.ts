@@ -1,7 +1,10 @@
 import { randomUUID } from "node:crypto";
 import { Value } from "@sinclair/typebox/value";
 import sharp from "sharp";
-import { FoodPhotoAnalysisResultSchema } from "./contracts.js";
+import {
+  FoodPhotoAnalysisResultSchema,
+  validFoodAnalysisContent,
+} from "./contracts.js";
 import type {
   FoodPhotoAnalysis,
   FoodPhotoAnalyzer,
@@ -136,10 +139,12 @@ export class FoodPhotoAnalysisService {
       if (
         !Value.Check(FoodPhotoAnalysisResultSchema, result) ||
         !result.model.trim() ||
-        !result.message.trim() ||
-        (result.status === "recognized") !== (result.food !== null) ||
-        (result.food !== null &&
-          (!result.food.name.trim() || !result.food.portion.trim()))
+        !validFoodAnalysisContent({
+          status: result.status,
+          food: result.food,
+          alternatives: result.alternatives,
+          message: result.message,
+        })
       ) {
         throw new FoodServiceError(
           502,

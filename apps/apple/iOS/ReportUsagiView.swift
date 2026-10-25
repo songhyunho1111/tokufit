@@ -2,11 +2,15 @@ import REPickShared
 import SwiftUI
 
 struct ReportUsagiView: View {
+    @Environment(UsagiStore.self) private var store
     let reaction: HealthReportReaction?
 
     var body: some View {
-        MapUsagiView(heading: 180, motion: .idle,
-                     accessibilityIdentifier: "reports.usagi.scene", reportReaction: reaction ?? .curious)
+        MapUsagiView(bodyScale: store.state.bodyScale, outfit: store.state.equippedOutfit,
+                     heading: 180, motion: .idle,
+                     accessibilityIdentifier: "reports.usagi.scene", equippedItems: store.state.equippedItems,
+                     reportReaction: reaction ?? .curious, muscleLevel: store.state.muscleLevel,
+                     nutritionMood: store.state.nutritionMood, costume: store.state.currentCostume)
             .frame(maxWidth: .infinity)
             .frame(height: 220)
             .accessibilityElement(children: .ignore)
@@ -46,4 +50,5 @@ struct ReportUsagiView: View {
         }
     }
     .background(Color.repickCream)
+    .environment(UsagiStore())
 }

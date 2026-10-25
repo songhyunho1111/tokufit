@@ -52,12 +52,15 @@ final class PhoneSync: NSObject, WCSessionDelegate {
         let appearance = Appearance(bodyScale: state.bodyScale, outfit: state.equippedOutfit,
                                     waterML: state.daily.waterML, hasProfile: state.profile != nil,
                                     character: state.preferences.character, items: state.equippedItems,
-                                    workoutMode: state.activeWorkout?.mode)
+                                    workoutMode: state.activeWorkout?.mode,
+                                    muscleLevel: state.muscleLevel, fieryEyes: state.attendanceNeedsAttention,
+                                    nutritionMood: state.nutritionMood, costume: state.currentCostume)
         if cachedAppearance == appearance { return cachedPNG }
         guard state.profile != nil, UIApplication.shared.applicationState != .background else { return nil }
+        let motion: UsagiMotion = state.activeWorkout.map { $0.mode == .indoor ? .exercising : .walking } ?? .idle
         for size in [CGSize(width: 320, height: 400), CGSize(width: 160, height: 200)] {
             if let image = UsagiSnapshotRenderer.render(state: state, size: size,
-                                                        motion: state.activeWorkout?.mode == .indoor ? .exercising : .idle),
+                                                        motion: motion),
                let png = image.pngData(), png.count <= 96 * 1_024 {
                 cachedAppearance = appearance
                 cachedPNG = png
@@ -75,6 +78,10 @@ final class PhoneSync: NSObject, WCSessionDelegate {
         let character: CharacterKind
         let items: [WardrobeItem]
         let workoutMode: WorkoutMode?
+        let muscleLevel: Double
+        let fieryEyes: Bool
+        let nutritionMood: NutritionMood
+        let costume: CostumeStyle?
     }
 
     nonisolated func session(_ session: WCSession, activationDidCompleteWith activationState: WCSessionActivationState, error: (any Error)?) {
