@@ -1,0 +1,2 @@
+ALTER TABLE "health_reports" ADD COLUMN "reaction" text;--> statement-breakpoint
+ALTER TABLE "health_reports" ADD CONSTRAINT "health_reports_reaction_check" CHECK ("health_reports"."reaction" in ('celebrate', 'encourage', 'rest', 'curious'));

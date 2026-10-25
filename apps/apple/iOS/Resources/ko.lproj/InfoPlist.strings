@@ -1,0 +1,6 @@
+"NSLocationWhenInUseUsageDescription" = "산책 중인 나의 우사기를 지도에 표시하기 위해 현재 위치를 사용합니다.";
+"NSMotionUsageDescription" = "오늘의 걸음 수를 확인하고 우사기의 운동 목표 달성에 반영합니다.";
+"NSCameraUsageDescription" = "음식을 촬영해 칼로리와 영양 정보의 추정값을 확인하기 위해 카메라를 사용합니다.";
+"CFBundleDisplayName" = "RE:PICK";
+
+"NSPhotoLibraryAddUsageDescription" = "우사기 공유 카드를 사진 보관함에 저장합니다.";

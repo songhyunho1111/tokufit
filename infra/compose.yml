@@ -1,0 +1,84 @@
+name: repick
+services:
+  postgres:
+    image: postgres:17.11-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: repick
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
+      APP_PASSWORD: ${APP_PASSWORD:?Set APP_PASSWORD}
+      MIGRATOR_PASSWORD: ${MIGRATOR_PASSWORD:?Set MIGRATOR_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-database.sh:/docker-entrypoint-initdb.d/01-repick.sh:ro
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U postgres -d repick']
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    networks: [database]
+  migrate:
+    build: ../backend
+    image: repick-api:0.1.0
+    profiles: [tools]
+    command: [node, dist/migrate.js]
+    environment:
+      PGHOST: postgres
+      PGDATABASE: repick
+      PGUSER: repick_migrator
+      PGPASSWORD: ${MIGRATOR_PASSWORD:?Set MIGRATOR_PASSWORD}
+    depends_on:
+      postgres: { condition: service_healthy }
+    networks: [database]
+  api:
+    build: ../backend
+    image: repick-api:0.1.0
+    restart: unless-stopped
+    environment:
+      PGHOST: postgres
+      PGDATABASE: repick
+      PGUSER: repick_app
+      PGPASSWORD: ${APP_PASSWORD:?Set APP_PASSWORD}
+      LLM_BASE_URL: ${LLM_BASE_URL:-https://llm.shh.name/v1}
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      LLM_WEEKLY_MODEL: ${LLM_WEEKLY_MODEL:-gpt-5.6-luna}
+      LLM_MONTHLY_MODEL: ${LLM_MONTHLY_MODEL:-gpt-6.1-sol}
+      LLM_FOOD_MODEL: ${LLM_FOOD_MODEL:-gpt-5.6-luna}
+      LLM_TIMEOUT_MS: ${LLM_TIMEOUT_MS:-45000}
+      REPORT_REGISTRATIONS_PER_IP_HOUR: ${REPORT_REGISTRATIONS_PER_IP_HOUR:-20}
+      REPORTS_PER_INSTALLATION_DAY: ${REPORTS_PER_INSTALLATION_DAY:-12}
+      REPORTS_PER_IP_DAY: ${REPORTS_PER_IP_DAY:-30}
+      REPORTS_GLOBAL_PER_DAY: ${REPORTS_GLOBAL_PER_DAY:-100}
+      FOOD_ANALYSES_PER_INSTALLATION_DAY: ${FOOD_ANALYSES_PER_INSTALLATION_DAY:-20}
+      FOOD_ANALYSES_PER_IP_DAY: ${FOOD_ANALYSES_PER_IP_DAY:-50}
+      FOOD_ANALYSES_GLOBAL_PER_DAY: ${FOOD_ANALYSES_GLOBAL_PER_DAY:-200}
+    depends_on:
+      postgres: { condition: service_healthy }
+    healthcheck:
+      test: [CMD, node, -e, 'fetch("http://127.0.0.1:3000/health/ready").then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))']
+      interval: 10s
+      timeout: 4s
+      retries: 3
+    networks: [database, proxy]
+  caddy:
+    image: caddy:2.11.7-alpine
+    restart: unless-stopped
+    environment:
+      API_DOMAIN: ${API_DOMAIN:?Set API_DOMAIN}
+    ports:
+      - '80:80'
+      - '443:443'
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      api: { condition: service_healthy }
+    networks: [proxy]
+volumes:
+  postgres_data:
+  caddy_data:
+  caddy_config:
+networks:
+  database: { internal: true }
+  proxy:

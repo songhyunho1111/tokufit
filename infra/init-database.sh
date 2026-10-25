@@ -1,0 +1,15 @@
+#!/bin/sh
+set -eu
+psql --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" --set=ON_ERROR_STOP=1 \
+  --set=app_password="$APP_PASSWORD" --set=migrator_password="$MIGRATOR_PASSWORD" <<'SQL'
+CREATE ROLE repick_app LOGIN PASSWORD :'app_password' NOSUPERUSER NOCREATEDB NOCREATEROLE;
+CREATE ROLE repick_migrator LOGIN PASSWORD :'migrator_password' NOSUPERUSER NOCREATEDB NOCREATEROLE;
+REVOKE ALL ON DATABASE repick FROM PUBLIC;
+GRANT CONNECT ON DATABASE repick TO repick_app, repick_migrator;
+GRANT CREATE ON DATABASE repick TO repick_migrator;
+REVOKE CREATE ON SCHEMA public FROM PUBLIC;
+GRANT USAGE ON SCHEMA public TO repick_app;
+GRANT USAGE, CREATE ON SCHEMA public TO repick_migrator;
+ALTER DEFAULT PRIVILEGES FOR ROLE repick_migrator IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO repick_app;
+ALTER DEFAULT PRIVILEGES FOR ROLE repick_migrator IN SCHEMA public GRANT USAGE, SELECT ON SEQUENCES TO repick_app;
+SQL
